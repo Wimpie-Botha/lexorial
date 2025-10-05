@@ -6,7 +6,7 @@ import BurgerMenu from "@/components/BurgerMenu"
 import LearnerProgress from "@/components/LearnerProgress"
 import { Lock, LogOut } from "lucide-react"
 import { User } from "@supabase/supabase-js"
-import { useRouter } from "next/navigation" // 🟢 Added for redirect after logout
+import { useRouter } from "next/navigation" //  Added for redirect after logout
 
 interface Module {
   id: string
@@ -37,7 +37,7 @@ export default function HomePage() {
   const [progress, setProgress] = useState<UserProgress[]>([])
   const [userId, setUserId] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
-  const router = useRouter() // 🟢 For navigation
+  const router = useRouter() //  For navigation
 
   // 🧠 Load Authenticated User
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function HomePage() {
         console.log("Logged in as:", data.user.email)
       } else {
         console.warn("No active session found.")
-        router.push("/login") // 🟢 Redirect to login if no session
+        router.push("/auth/login") // Redirect to login if no session
       }
     }
 
@@ -62,7 +62,7 @@ export default function HomePage() {
       } else {
         setUser(null)
         setUserId(null)
-        router.push("/login") // 🟢 Redirect on logout
+        router.push("/auth/login") // Redirect on logout
       }
     })
 
@@ -147,7 +147,7 @@ export default function HomePage() {
           <button
             onClick={async () => {
               await supabase.auth.signOut()
-              router.push("/login") // 🟢 Redirect to login page
+              router.push("/auth/login") //Redirect to login page
             }}
             className="flex items-center text-sm text-red-500 hover:text-red-600 transition"
           >
@@ -161,7 +161,7 @@ export default function HomePage() {
         You are now logged in to the Afrikaans learning platform. 🎉
       </p>
 
-      {/* 🌈 3-column layout */}
+      {/* 3-column layout */}
       <div className="grid grid-cols-3 gap-4">
         {/* LEFT COLUMN — MODULES */}
         <div>
@@ -237,7 +237,7 @@ export default function HomePage() {
                         <h4 className="font-bold text-sm">{lesson.title}</h4>
                       </div>
 
-                      {/* 🟢 Tiny Green Dot for Completed Lessons */}
+                      {/*  Completed Lessons */}
                       {isCompleted && (
                         <span className="w-2 h-2 bg-green-500 rounded-full inline-block mr-1"></span>
                       )}
