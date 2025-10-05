@@ -237,7 +237,7 @@ export default function HomePage() {
                         <h4 className="font-bold text-sm">{lesson.title}</h4>
                       </div>
 
-                      {/*  Completed Lessons */}
+                      {/*  Tiny Green Dot for Completed Lessons */}
                       {isCompleted && (
                         <span className="w-2 h-2 bg-green-500 rounded-full inline-block mr-1"></span>
                       )}
