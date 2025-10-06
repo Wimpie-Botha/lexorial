@@ -5,53 +5,55 @@ import { supabase } from "@/lib/supabaseClient";
 import BurgerMenu from "@/components/BurgerMenu";
 import { Lock } from "lucide-react";
 
-// === Types ===
-interface Module {
-  id: string;
-  title: string;
-  description?: string;
-  level?: number;
-  is_unlocked?: boolean;
-  lessons?: Lesson[];
-}
+    // === Types ===
+    interface Module {
+    id: string;
+    title: string;
+    description?: string;
+    level?: number;
+    is_unlocked?: boolean;
+    lessons?: Lesson[];
+    }
 
-interface Lesson {
-  id: string;
-  module_id: string;
-  title: string;
-  intro?: string;
-  order_index?: number;
-  is_unlocked?: boolean;
-  completed?: boolean;
-}
+    interface Lesson {
+    id: string;
+    module_id: string;
+    title: string;
+    intro?: string;
+    order_index?: number;
+    is_unlocked?: boolean;
+    completed?: boolean;
+    }
 
-export default function HomePage() {
-const [userLevelLesson, setUserLevelLesson] = useState(0);
-  const [open, setOpen] = useState(false);
-  const [session, setSession] = useState<any>(null);
-  const [modules, setModules] = useState<Module[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
-  const [loadingModules, setLoadingModules] = useState(true);
-  const [loadingLessons, setLoadingLessons] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+    export default function HomePage() {
+    const [userLevelLesson, setUserLevelLesson] = useState(0);
+    const [open, setOpen] = useState(false);
+    const [session, setSession] = useState<any>(null);
+    const [modules, setModules] = useState<Module[]>([]);
+    const [lessons, setLessons] = useState<Lesson[]>([]);
+    const [selectedModule, setSelectedModule] = useState<string | null>(null);
+    const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
+    const [lessonContent, setLessonContent] = useState<any>(null);
+    const [loadingContent, setLoadingContent] = useState(false);
+    const [loadingModules, setLoadingModules] = useState(true);
+    const [loadingLessons, setLoadingLessons] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-  // Progress state
-  const [currentLevel, setCurrentLevel] = useState(1);
-  const [progress, setProgress] = useState(0);
-  const [loadingProgress, setLoadingProgress] = useState(true);
+    // Progress state
+    const [currentLevel, setCurrentLevel] = useState(1);
+    const [progress, setProgress] = useState(0);
+    const [loadingProgress, setLoadingProgress] = useState(true);
 
-  // 🔐 Load current Supabase session
-  useEffect(() => {
-    const getSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setSession(session);
-    };
-    getSession();
-  }, []);
+    // 🔐 Load current Supabase session
+    useEffect(() => {
+      const getSession = async () => {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        setSession(session);
+      };
+      getSession();
+    }, []);
 
 
 useEffect(() => {
@@ -154,8 +156,39 @@ useEffect(() => {
     }
   };
 
-  fetchLessons();
-}, [selectedModule, session?.access_token, modules]);
+    fetchLessons();
+  }, [selectedModule, session?.access_token, modules]);
+  // 🌐 Fetch content for selected lesson
+
+
+  useEffect(() => {
+
+     console.log("🔥 useEffect triggered for lesson:", selectedLesson);
+    if (!selectedLesson) return;
+
+    const fetchLessonContent = async () => {
+      try {
+        setLoadingContent(true);
+        setLessonContent(null);
+
+        const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`);
+        if (!res.ok) throw new Error("Failed to fetch lesson content");
+        const data = await res.json();
+        setLessonContent(data);
+      } catch (err: any) {
+        console.error("Error fetching lesson content:", err.message);
+      } finally {
+        setLoadingContent(false);
+        
+      }
+    };
+
+      fetchLessonContent();
+    }, [selectedLesson]);
+
+  
+   
+
 
   // === Render ===
   return (
@@ -294,8 +327,11 @@ useEffect(() => {
                     return (
                     <button
                         key={lesson.id}
-                        onClick={() => lesson.is_unlocked && setSelectedLesson(lesson.id)}
-                        disabled={!lesson.is_unlocked}
+                        onClick={() => {lesson.is_unlocked && setSelectedLesson(lesson.id);
+                                        }}
+                                    disabled={!lesson.is_unlocked}
+
+                        
                         className={`relative flex justify-between items-center px-3 py-2 border rounded-md transition-all duration-200 active:scale-[0.97]
                         ${
                             isCompleted
@@ -345,27 +381,106 @@ useEffect(() => {
           )}
         </div>
 
-        {/* === RIGHT COLUMN — CONTENT === */}
-        <div>
-          <h2 className="text-lg font-semibold mb-2">Lesson Content</h2>
-          {selectedLesson ? (
-            <div>
-              <p className="text-gray-700 text-sm mb-2">
-                📘 You selected lesson{" "}
-                <span className="font-semibold">{selectedLesson}</span>.
-              </p>
-              <p className="text-gray-500 text-sm italic">
-                Lesson content (videos, slides, flashcards, etc.) will appear
-                here.
-              </p>
-            </div>
-          ) : (
-            <p className="text-gray-400 text-sm italic">
-              Select a lesson to view its content.
-            </p>
-          )}
-        </div>
-      </div>
+      {/* === RIGHT COLUMN — CONTENT === */}
+<div>
+  <h2 className="text-lg font-semibold mb-2">Lesson Content</h2>
+
+  {!selectedLesson ? (
+    <p className="text-gray-400 text-sm italic">
+      Select a lesson to view its content.
+    </p>
+  ) : loadingContent ? (
+    <p className="text-gray-500 text-sm">Loading lesson content...</p>
+  ) : lessonContent ? (
+    <div className="flex flex-col space-y-2">
+      <h3 className="text-lg font-bold text-gray-800 mb-2">
+        {lessonContent.lesson.title}
+      </h3>
+
+      {/* === Video button === */}
+      {lessonContent.videos?.length > 0 && (
+        <button
+          className="flex justify-between items-center px-3 py-2 border border-gray-400 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-150 active:scale-[0.97]"
+          onClick={() => console.log("Open video player")}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 font-bold">🎬</span>
+            <span className="font-semibold text-sm">Video Lesson</span>
+          </div>
+          <span className="text-xs text-gray-600">
+            {lessonContent.videos.length} file(s)
+          </span>
+        </button>
+      )}
+
+      {/* === Slides button === */}
+      {lessonContent.slides?.length > 0 && (
+        <button
+          className="flex justify-between items-center px-3 py-2 border border-gray-400 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-150 active:scale-[0.97]"
+          onClick={() => console.log("Open slides")}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-blue-600 font-bold">📑</span>
+            <span className="font-semibold text-sm">Slides</span>
+          </div>
+          <span className="text-xs text-gray-600">
+            {lessonContent.slides.length} file(s)
+          </span>
+        </button>
+      )}
+
+      {/* === Flashcards button === */}
+      {lessonContent.flashcards?.length > 0 && (
+        <button
+          className="flex justify-between items-center px-3 py-2 border border-gray-400 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-150 active:scale-[0.97]"
+          onClick={() => console.log("Open flashcards")}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-600 font-bold">🧠</span>
+            <span className="font-semibold text-sm">Flashcards</span>
+          </div>
+          <span className="text-xs text-gray-600">
+            {lessonContent.flashcards.length} card(s)
+          </span>
+        </button>
+      )}
+
+      {/* === Questions button === */}
+      {lessonContent.questions?.length > 0 && (
+        <button
+          className="flex justify-between items-center px-3 py-2 border border-gray-400 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-150 active:scale-[0.97]"
+          onClick={() => console.log("Open questions")}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-purple-600 font-bold">❓</span>
+            <span className="font-semibold text-sm">Questions</span>
+          </div>
+          <span className="text-xs text-gray-600">
+            {lessonContent.questions.length} question(s)
+          </span>
+        </button>
+      )}
+
+
+      {/* === No content message === */}
+      {!lessonContent.videos?.length &&
+        !lessonContent.slides?.length &&
+        !lessonContent.flashcards?.length &&
+        !lessonContent.questions?.length && (
+          <p className="text-gray-500 text-sm italic mt-2">
+            fokkol.
+          </p>
+        )}
     </div>
+  ) : (
+      <p className="text-gray-500 text-sm italic">
+        No content found for this lesson.
+      </p>
+    )}
+  </div>
+      </div> {/* End grid (modules + lessons + content) */}
+    </div> 
+    
   );
 }
+
