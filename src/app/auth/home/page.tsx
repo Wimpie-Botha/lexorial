@@ -1,157 +1,234 @@
-"use client"
+"use client";
 
-import React, { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
-import BurgerMenu from "@/components/BurgerMenu"
-import LearnerProgress from "@/components/LearnerProgress"
-import { Lock, LogOut } from "lucide-react"
-import { User } from "@supabase/supabase-js"
-import { useRouter } from "next/navigation" //  Added for redirect after logout
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import BurgerMenu from "@/components/BurgerMenu";
+import { Lock } from "lucide-react";
 
+// === Types ===
 interface Module {
-  id: string
-  title: string
-  description?: string
+  id: string;
+  title: string;
+  description?: string;
+  level?: number;
+  is_unlocked?: boolean;
+  lessons?: Lesson[];
 }
 
 interface Lesson {
-  id: string
-  module_id: string
-  title: string
-  intro?: string
-}
-
-interface UserProgress {
-  module_id: string
-  lesson_id: string
-  completed: boolean
+  id: string;
+  module_id: string;
+  title: string;
+  intro?: string;
+  order_index?: number;
+  is_unlocked?: boolean;
+  completed?: boolean;
 }
 
 export default function HomePage() {
-  const [open, setOpen] = useState(false)
-  const [modules, setModules] = useState<Module[]>([])
-  const [lessons, setLessons] = useState<Lesson[]>([])
-  const [selectedModule, setSelectedModule] = useState<string | null>(null)
-  const [selectedLesson, setSelectedLesson] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [progress, setProgress] = useState<UserProgress[]>([])
-  const [userId, setUserId] = useState<string | null>(null)
-  const [user, setUser] = useState<User | null>(null)
-  const router = useRouter() //  For navigation
+const [userLevelLesson, setUserLevelLesson] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
+  const [loadingModules, setLoadingModules] = useState(true);
+  const [loadingLessons, setLoadingLessons] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // 🧠 Load Authenticated User
+  // Progress state
+  const [currentLevel, setCurrentLevel] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(true);
+
+  // 🔐 Load current Supabase session
   useEffect(() => {
-    const fetchUser = async () => {
-      const { data, error } = await supabase.auth.getUser()
-      if (!error && data?.user) {
-        setUser(data.user)
-        setUserId(data.user.id)
-        console.log("Logged in as:", data.user.email)
-      } else {
-        console.warn("No active session found.")
-        router.push("/auth/login") // Redirect to login if no session
-      }
+    const getSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      setSession(session);
+    };
+    getSession();
+  }, []);
+
+
+useEffect(() => {
+  const fetchProgress = async () => {
+    if (!session?.access_token) return;
+
+    try {
+      setLoadingProgress(true);
+      const res = await fetch("/api/progress", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch progress data.");
+
+      const data = await res.json();
+
+      // ✅ Update state values
+      setCurrentLevel(data.level || 1);
+      setUserLevelLesson(data.level_lesson || 0);
+      setProgress(data.module_progress || 0);
+
+      console.log("📊 Progress:", data);
+    } catch (err: any) {
+      console.error("Error fetching progress:", err.message);
+    } finally {
+      setLoadingProgress(false);
     }
+  };
 
-    fetchUser()
+  fetchProgress();
+}, [session]);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-        setUserId(session.user.id)
-      } else {
-        setUser(null)
-        setUserId(null)
-        router.push("/auth/login") // Redirect on logout
-      }
-    })
 
-    return () => {
-      authListener.subscription.unsubscribe()
-    }
-  }, [router])
-
-  // 📦 Load Modules
+  // 🌐 Fetch modules via API and mark unlocked ones based on level
   useEffect(() => {
     const fetchModules = async () => {
-      const { data, error } = await supabase.from("modules").select("*").order("id")
-      if (error) console.error("Error loading modules:", error)
-      else setModules(data || [])
-    }
-    fetchModules()
-  }, [])
+      if (!session) return;
+      setLoadingModules(true);
+      try {
+        const res = await fetch("/api/modules", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) throw new Error("Failed to fetch modules.");
+        const { modules } = await res.json();
 
-  // 📊 Load User Progress
+        // Unlock modules if module.level <= user.currentLevel
+        const unlockedModules = modules.map((mod: Module, index: number) => ({
+          ...mod,
+          level: mod.level || index + 1, // fallback if no level column yet
+          is_unlocked: (mod.level || index + 1) <= currentLevel,
+        }));
+
+        setModules(unlockedModules);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoadingModules(false);
+      }
+    };
+    if (session) fetchModules();
+  }, [session, currentLevel]);
+
+  // 🌐 Fetch lessons for selected module and mark unlocked based on module unlock
   useEffect(() => {
-    if (!userId) return
-    const fetchProgress = async () => {
-      const { data, error } = await supabase
-        .from("user_progress")
-        .select("module_id, lesson_id, completed")
-        .eq("user_id", userId)
-      if (error) console.error("Error loading progress:", error)
-      else setProgress(data || [])
-      setLoading(false)
+  // 🧠 Only run if we have a selected module AND a valid session
+  if (!selectedModule || !session) return;
+
+  const fetchLessons = async () => {
+    try {
+      setLoadingLessons(true);
+
+      const token = session.access_token;
+      if (!token) {
+        console.warn("⚠️ Missing authorization token — skipping lesson fetch.");
+        return;
+      }
+
+      // 🌐 Fetch lessons for this module
+      const res = await fetch(`/api/lessons?moduleId=${selectedModule}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error(`Failed to fetch lessons (${res.status})`);
+
+      const { lessons } = await res.json();
+
+      // 🔍 Find the selected module to determine overall unlock status
+      const selectedMod = modules.find((m) => m.id === selectedModule);
+      const moduleUnlocked = selectedMod?.is_unlocked ?? false;
+
+      // 🔓 Merge server unlock info with module unlock
+      // (Server already decides which lessons are unlocked)
+      setLessons(lessons);
+
+    } catch (err: any) {
+      console.error("❌ Error fetching lessons:", err.message);
+      setError(err.message);
+    } finally {
+      setLoadingLessons(false);
     }
-    fetchProgress()
-  }, [userId])
+  };
 
-  // 📚 Load Lessons for Selected Module
-  useEffect(() => {
-    if (!selectedModule) return
-    const fetchLessons = async () => {
-      const { data, error } = await supabase
-        .from("lessons")
-        .select("*")
-        .eq("module_id", selectedModule)
-        .order("order_index", { ascending: true })
-      if (error) console.error("Error loading lessons:", error)
-      else setLessons(data || [])
-    }
-    fetchLessons()
-  }, [selectedModule])
+  fetchLessons();
+}, [selectedModule, session?.access_token, modules]);
 
-  // 🧩 Determine if module is unlocked
-  const isModuleUnlocked = (moduleId: string): boolean => {
-    return progress.some((p) => p.module_id === moduleId)
-  }
-
-  // 🧩 Determine if lesson is completed
-  const isLessonCompleted = (lessonId: string): boolean => {
-    return progress.some((p) => p.lesson_id === lessonId && p.completed)
-  }
-
-  // 🧩 Mark Lesson Placeholder (for future)
-  const markLessonComplete = async (lessonId: string) => {
-    console.log("TODO: mark lesson as complete in Supabase:", lessonId)
-    // Future implementation: call Supabase function to update progress
-  }
-
+  // === Render ===
   return (
-    <div className="p-10">
+    <div className="p-10 relative overflow-hidden">
+      {/* === Burger Menu (button) === */}
       <BurgerMenu side="left" isOpen={open} onToggle={setOpen} />
-      <LearnerProgress side="left" open={open} onClose={() => setOpen(false)} />
 
-      {/* 🔹 User Info Bar */}
-      {user && (
-        <div className="flex justify-between items-center mb-6 bg-gray-100 px-4 py-3 rounded-md shadow-sm">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-full bg-blue-400 text-white flex items-center justify-center font-semibold">
-              {user.email?.[0].toUpperCase()}
+      {/* === Sidebar: Your Progress === */}
+      <div
+        className={`fixed top-0 left-0 z-40 h-full w-64 bg-white shadow-xl border-r border-gray-200 
+        transform transition-all duration-500 ease-in-out ${
+          open ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"
+        }`}
+      >
+        <div className="flex flex-col h-full p-4">
+          <h2 className="text-xl font-semibold mb-4">Your Progress</h2>
+
+          {loadingProgress ? (
+            <div className="bg-gray-100 rounded-lg p-4 mb-6 animate-pulse">
+              <div className="h-4 bg-gray-300 rounded w-1/3 mb-3"></div>
+              <div className="h-2 bg-gray-300 rounded"></div>
             </div>
-            <div>
-              <p className="font-medium text-gray-800 text-sm">{user.email}</p>
-              <p className="text-xs text-gray-500">Signed in</p>
+          ) : (
+            <div className="bg-gradient-to-r from-[#24C655] to-[#1D9E44] text-white rounded-lg p-4 mb-6 shadow-md">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-medium">
+                  Level {currentLevel}
+                </span>
+                <span className="text-sm font-medium">
+                  {progress.toFixed(0)}%
+                </span>
+              </div>
+              <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-white h-2 rounded-full transition-all duration-500 ease-in-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              {progress === 100 && (
+                <p className="text-xs mt-2 text-white/80">
+                  🎉 Level Up! You’ve completed Level {currentLevel}!
+                </p>
+              )}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* === Overlay === */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-500"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* === Top Banner === */}
+      {session && (
+        <div className="flex items-center justify-between bg-gray-100 border border-gray-300 rounded-2xl px-4 py-2 mb-6">
+          <div>
+            <p className="text-gray-600 text-sm">
+              Signed in as{" "}
+              <span className="font-semibold">{session.user.email}</span>
+            </p>
           </div>
           <button
             onClick={async () => {
-              await supabase.auth.signOut()
-              router.push("/auth/login") //Redirect to login page
+              await supabase.auth.signOut();
+              window.location.href = "/auth/login";
             }}
-            className="flex items-center text-sm text-red-500 hover:text-red-600 transition"
+            className="px-3 py-1 bg-red-300 text-white text-sm font-semibold rounded-md border border-black/[0.9] hover:bg-red-600 transition-colors"
           >
-            <LogOut size={16} className="mr-1" /> Log out
+            Sign out
           </button>
         </div>
       )}
@@ -161,118 +238,134 @@ export default function HomePage() {
         You are now logged in to the Afrikaans learning platform. 🎉
       </p>
 
-      {/* 3-column layout */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* LEFT COLUMN — MODULES */}
+      {error && <p className="text-red-500 mb-4 font-medium">⚠️ {error}</p>}
+
+      {/* === MAIN CONTENT === */}
+      <div className="grid grid-cols-3 gap-1">
+        {/* === LEFT COLUMN — MODULES === */}
         <div>
           <h2 className="text-lg font-semibold mb-2">Modules</h2>
-          <div className="flex flex-col">
-            {loading ? (
-              <p className="text-gray-500">Loading modules...</p>
-            ) : (
-              modules.map((mod) => {
-                const unlocked = isModuleUnlocked(mod.id)
-                return (
-                  <button
-                    key={mod.id}
-                    onClick={() => unlocked && setSelectedModule(mod.id)}
-                    disabled={!unlocked}
-                    className={`relative group text-left flex justify-between items-center px-3 py-2 border border-gray-300 rounded-md transition-all duration-150 active:scale-[0.97]
-                      ${
-                        selectedModule === mod.id
-                          ? "bg-gray-200"
-                          : unlocked
-                          ? "bg-gray-50 hover:bg-gray-100"
-                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      }`}
-                    style={{ minHeight: "50px" }}
-                  >
-                    <div className="flex items-center gap-2">
-                      {!unlocked && <Lock size={14} className="text-gray-500" />}
-                      <h3 className="font-bold text-sm">{mod.title}</h3>
-                    </div>
-                  </button>
-                )
-              })
-            )}
-          </div>
+          {loadingModules ? (
+            <p className="text-gray-500">Loading modules…</p>
+          ) : (
+            <div className="flex flex-col space-y-1">
+              {modules.map((mod) => (
+                <button
+                  key={mod.id}
+                  onClick={() =>
+                    mod.is_unlocked && setSelectedModule(mod.id)
+                  }
+                  disabled={!mod.is_unlocked}
+                  className={`relative flex justify-between items-center px-3 py-2 border border-gray-400 rounded-md transition-all duration-150 active:scale-[0.97] ${
+                    selectedModule === mod.id
+                      ? "bg-gray-200"
+                      : "bg-gray-50 hover:bg-gray-100"
+                  } ${!mod.is_unlocked ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <div className="flex items-center gap-2">
+                    {!mod.is_unlocked && (
+                      <Lock size={14} className="text-gray-500" />
+                    )}
+                    <h3 className="font-bold text-sm">
+                      {mod.title} (Lvl {mod.level})
+                    </h3>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* MIDDLE COLUMN — LESSONS */}
+        {/* === MIDDLE COLUMN — LESSONS === */}
         <div>
           <h2 className="text-lg font-semibold mb-2">Lessons</h2>
-          <div className="flex flex-col">
-            {selectedModule ? (
-              lessons.length > 0 ? (
-                lessons.map((lesson, index) => {
-                  const prevLessonCompleted =
-                    index === 0 ||
-                    progress.some(
-                      (p) =>
-                        p.lesson_id === lessons[index - 1]?.id && p.completed
-                    )
+          {loadingLessons ? (
+            <p className="text-gray-500">Loading lessons…</p>
+          ) : selectedModule ? (
+            <div className="flex flex-col space-y-1">
+             {lessons.length > 0 ? (
+                lessons.map((lesson) => {
+                    // ✅ Check if the lesson is completed or current
+                    const isCompleted =
+                            lesson.order_index! <= userLevelLesson && lesson.is_unlocked;
+                            const isActive =
+                            lesson.order_index === userLevelLesson + 1 && lesson.is_unlocked;
 
-                  const isUnlocked = prevLessonCompleted
-                  const isCompleted = isLessonCompleted(lesson.id)
-
-                  return (
+                    return (
                     <button
-                      key={lesson.id}
-                      onClick={() => isUnlocked && setSelectedLesson(lesson.id)}
-                      disabled={!isUnlocked}
-                      className={`relative group text-left flex items-center justify-between px-3 py-2 border border-gray-300 rounded-md transition-all duration-150 active:scale-[0.97]
+                        key={lesson.id}
+                        onClick={() => lesson.is_unlocked && setSelectedLesson(lesson.id)}
+                        disabled={!lesson.is_unlocked}
+                        className={`relative flex justify-between items-center px-3 py-2 border rounded-md transition-all duration-200 active:scale-[0.97]
                         ${
-                          selectedLesson === lesson.id
-                            ? "bg-gray-200"
-                            : isUnlocked
-                            ? "bg-gray-50 hover:bg-gray-100"
-                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        }`}
-                      style={{ minHeight: "50px" }}
+                            isCompleted
+                            ? "bg-green-50 border-green-500 text-green-700"
+                            : isActive
+                            ? "bg-gray-100 border-gray-400 text-gray-800"
+                            : "bg-gray-50 border-gray-300 text-gray-600"
+                        }
+                        ${!lesson.is_unlocked ? "opacity-50 cursor-not-allowed" : ""}
+                        `}
                     >
-                      <div className="flex items-center gap-2">
-                        {!isUnlocked && (
-                          <Lock size={14} className="text-gray-500" />
-                        )}
-                        <h4 className="font-bold text-sm">{lesson.title}</h4>
-                      </div>
+                        <div className="flex items-center gap-2">
+                        {!lesson.is_unlocked && <Lock size={12} className="text-gray-500" />}
 
-                      {/*  Tiny Green Dot for Completed Lessons */}
-                      {isCompleted && (
-                        <span className="w-2 h-2 bg-green-500 rounded-full inline-block mr-1"></span>
-                      )}
+                        <h4
+                            className={`font-semibold text-sm ${
+                            isCompleted
+                                ? "text-green-700"
+                                : isActive
+                                ? "text-gray-800"
+                                : "text-gray-600"
+                            }`}
+                        >
+                            Lesson {lesson.order_index}: {lesson.title}
+                        </h4>
+                        </div>
+
+                        {/* ✅ Completion icon */}
+                        {isCompleted && (
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold">
+                            ✓
+                        </span>
+                        )}
                     </button>
-                  )
+                    );
                 })
-              ) : (
+                ) : (
                 <p className="text-gray-500 text-sm italic">
-                  No lessons found for this module.
+                    No lessons found for this module.
                 </p>
-              )
-            ) : (
-              <p className="text-gray-400 text-sm italic">
-                Select a module to view its lessons.
-              </p>
-            )}
-          </div>
+)}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-sm italic">
+              Select a module to view its lessons.
+            </p>
+          )}
         </div>
 
-        {/* RIGHT COLUMN — CONTENT */}
+        {/* === RIGHT COLUMN — CONTENT === */}
         <div>
           <h2 className="text-lg font-semibold mb-2">Lesson Content</h2>
           {selectedLesson ? (
-            <p className="text-gray-700 text-sm">
-              📘 You selected lesson{" "}
-              <span className="font-semibold">{selectedLesson}</span>.  
-              Lesson content (videos, slides, flashcards, etc.) will appear here.
-            </p>
+            <div>
+              <p className="text-gray-700 text-sm mb-2">
+                📘 You selected lesson{" "}
+                <span className="font-semibold">{selectedLesson}</span>.
+              </p>
+              <p className="text-gray-500 text-sm italic">
+                Lesson content (videos, slides, flashcards, etc.) will appear
+                here.
+              </p>
+            </div>
           ) : (
-            <p className="text-gray-500 text-sm italic">
-              Select a lesson to view its videos, slides, flashcards, and questions.
+            <p className="text-gray-400 text-sm italic">
+              Select a lesson to view its content.
             </p>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }

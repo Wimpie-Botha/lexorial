@@ -1,63 +1,76 @@
-import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabaseClient"
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-/**
- * GET /api/modules
- * Returns all modules plus whether each one is unlocked for the current user
- */
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
 export async function GET(request: Request) {
   try {
-    // 🧩 Get current user session
-    const { data: authData } = await supabase.auth.getUser()
-    const userId = authData?.user?.id
+    // 1️⃣ Authenticate user
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
 
-    // 1️⃣ Get all modules
-    const { data: modules, error: modError } = await supabase
-      .from("modules")
-      .select("*")
-      .order("id")
-    if (modError) throw modError
-
-    if (!userId) {
-      // not logged in — only show first module as unlocked
-      const safeModules = modules.map((m, i) => ({
-        ...m,
-        is_unlocked: i === 0,
-      }))
-      return NextResponse.json({ modules: safeModules })
+    if (!token) {
+      console.warn("❌ Missing authorization token");
+      return NextResponse.json({ error: "Missing authorization token" }, { status: 401 });
     }
 
-    // 2️⃣ Get user progress
-    const { data: progress, error: progError } = await supabase
-      .from("user_progress")
-      .select("module_id, completed")
-      .eq("user_id", userId)
-    if (progError) throw progError
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
 
-    // 3️⃣ Mark modules unlocked if previous completed
-    const unlockedModules = modules.map((m, i) => {
-      if (i === 0) return { ...m, is_unlocked: true }
-      const previousId = modules[i - 1]?.id
-      const prevDone = progress?.some(
-        (p) => p.module_id === previousId && p.completed
-      )
-      return { ...m, is_unlocked: prevDone }
-    })
+    if (userError || !user) {
+      console.warn("❌ Unauthorized:", userError?.message);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    return NextResponse.json({ modules: unlockedModules })
+    // 2️⃣ Fetch user's level safely
+    const { data: userData, error: userError2 } = await supabase
+      .from("users")
+      .select("level, level_lesson")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (userError2) throw new Error(userError2.message);
+
+    const userLevel = userData?.level ?? 1;
+    console.log(`✅ User level: ${userLevel}`);
+
+    // 3️⃣ Fetch all modules (ensure "level" column exists)
+    const { data: modules, error: modulesError } = await supabase
+      .from("modules")
+      .select("id, title, description, level")
+      .order("level", { ascending: true });
+
+    if (modulesError) throw new Error(modulesError.message);
+
+    if (!modules || modules.length === 0) {
+      console.warn("⚠️ No modules found in database.");
+      return NextResponse.json({ modules: [] });
+    }
+
+    console.log(`✅ Found ${modules.length} modules`);
+
+    // 4️⃣ Add fallback levels if missing
+    const leveledModules = modules.map((mod, idx) => ({
+      ...mod,
+      level: mod.level ?? idx + 1,
+    }));
+
+    // 5️⃣ Mark unlocked modules
+    const updatedModules = leveledModules.map((mod) => ({
+      ...mod,
+      is_unlocked: mod.level <= userLevel,
+    }));
+
+    return NextResponse.json({ modules: updatedModules });
   } catch (err: any) {
-    console.error("Error fetching modules:", err)
+    console.error("❌ Error in /api/modules:", err.message);
     return NextResponse.json(
-      { error: err.message || "Server error" },
+      { error: err.message || "Internal server error" },
       { status: 500 }
-    )
+    );
   }
 }
-// Note: POST, PUT, DELETE handlers can be added similarly when needed
-
-export async function POST(request: Request) {
-  return NextResponse.json(
-    { error: "Not implemented" },
-    { status: 501 }
-  )
-}   
