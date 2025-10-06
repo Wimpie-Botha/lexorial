@@ -247,7 +247,7 @@ useEffect(() => {
 
       {/* === Top Banner === */}
       {session && (
-        <div className="flex items-center justify-between bg-gray-100 border border-gray-300 rounded-2xl px-4 py-2 mb-6">
+        <div className="flex items-center justify-between bg-gray-100 border border-gray-300 rounded-2xl px-9 py-2 mb-10">
           <div>
             <p className="text-gray-600 text-sm">
               Signed in as{" "}
@@ -259,7 +259,7 @@ useEffect(() => {
               await supabase.auth.signOut();
               window.location.href = "/auth/login";
             }}
-            className="px-3 py-1 bg-red-300 text-white text-sm font-semibold rounded-md border border-black/[0.9] hover:bg-red-600 transition-colors"
+            className="px-2 py-1 bg-red-300 text-white text-sm font-semibold rounded-md border border-black/[0.9] hover:bg-red-600 transition-colors"
           >
             Sign out
           </button>
