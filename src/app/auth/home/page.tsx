@@ -182,7 +182,7 @@ useEffect(() => {
             <div className="bg-gradient-to-r from-[#24C655] to-[#1D9E44] text-white rounded-lg p-4 mb-6 shadow-md">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">
-                  Level {currentLevel}
+                  Level {currentLevel-1}
                 </span>
                 <span className="text-sm font-medium">
                   {progress.toFixed(0)}%
@@ -196,7 +196,7 @@ useEffect(() => {
               </div>
               {progress === 100 && (
                 <p className="text-xs mt-2 text-white/80">
-                  🎉 Level Up! You’ve completed Level {currentLevel}!
+                  🎉 Level Up! You’ve reached Level {currentLevel}!
                 </p>
               )}
             </div>

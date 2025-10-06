@@ -69,6 +69,7 @@ export async function POST(request: Request) {
 }
 
 // === GET: Retrieve current user level + lesson-level ===
+// === GET: Retrieve current user level + lesson-level ===
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get("authorization");
@@ -77,47 +78,62 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing authorization token" }, { status: 401 });
     }
 
+    // 🔐 Verify user identity via Supabase Auth
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
-
     if (userError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-  // 🧾 Fetch user progress (level + level_lesson)
-const { data: progressData, error: progressError } = await supabase
-  .from("users")
-  .select("level, level_lesson")
-  .eq("id", user.id)
-  .maybeSingle();
+    // 🧾 Fetch user progress (level + level_lesson)
+    const { data: userProgress, error: progressError } = await supabase
+      .from("users")
+      .select("level, level_lesson")
+      .eq("id", user.id)
+      .maybeSingle();
 
-if (progressError) throw new Error(progressError.message);
+    if (progressError) throw new Error(progressError.message);
 
-// Provide safe fallback values if user row is missing
-const userProgress = {
-  level: progressData?.level ?? 1,
-  level_lesson: progressData?.level_lesson ?? 0,
-};
+    const level = userProgress?.level ?? 1;
+    const level_lesson = userProgress?.level_lesson ?? 0;
 
-// 🧮 Compute total modules count
-const { count: totalModules, error: countError } = await supabase
-  .from("modules")
-  .select("id", { count: "exact", head: true });
+    // 🧩 Fetch current module info
+    const { data: currentModule, error: moduleError } = await supabase
+      .from("modules")
+      .select("id, level")
+      .eq("level", level)
+      .maybeSingle();
 
-if (countError) throw new Error(countError.message);
+    if (moduleError) throw new Error(moduleError.message);
 
-// 🧮 Calculate module progress percent
-const modulePercent =
-  totalModules && totalModules > 0
-    ? (userProgress.level / totalModules) * 100
-    : 0;
+    // 🧩 Fetch all lessons belonging to current module
+    const { data: lessons, error: lessonsError } = await supabase
+      .from("lessons")
+      .select("id, module_id, order_index")
+      .eq("module_id", currentModule?.id || "")
+      .order("order_index", { ascending: true });
 
-return NextResponse.json({
-  level: userProgress.level,
-  level_lesson: userProgress.level_lesson,
-  module_progress: parseFloat(modulePercent.toFixed(1)),
-  message: "User progress retrieved successfully",
-});
+    if (lessonsError) throw new Error(lessonsError.message);
+
+    const totalLessons = lessons?.length || 0;
+
+    // 🧮 Calculate % based on current module only
+    const progressPercent =
+      totalLessons > 0
+        ? Math.min((level_lesson / totalLessons) * 100, 100)
+        : 0;
+
+    // 🧮 Adjust display level (show n-1 if current module incomplete)
+    const displayLevel =
+      level > 1 && level_lesson === 0 ? level - 1 : level;
+
+    return NextResponse.json({
+      level: displayLevel,
+      level_lesson,
+      module_progress: parseFloat(progressPercent.toFixed(1)),
+      total_lessons: totalLessons,
+      message: "User progress retrieved successfully",
+    });
   } catch (err: any) {
     console.error("Error in GET /progress:", err.message);
     return NextResponse.json(
@@ -125,4 +141,4 @@ return NextResponse.json({
       { status: 500 }
     );
   }
-}
+}   
