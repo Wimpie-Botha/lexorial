@@ -200,7 +200,7 @@ export default function CoursesPage() {
               </label>
               <button
                 onClick={addLesson}
-                className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm"
+                className="flex items-center gap-1 px-3 py-1 bg-green-100 border border-green-400 text-black rounded-md hover:bg-green-400 text-sm"
               >
                 <Plus size={14} /> Add
               </button>
@@ -329,7 +329,7 @@ export default function CoursesPage() {
         {unsavedChanges && (
           <button
             onClick={saveAllChanges}
-            className="mt-6 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition-all"
+            className="mt-6 w-full bg-green-100 border border-green-500 text-black font-semibold py-2 rounded-lg hover:bg-green-300 transition-all"
           >
             💾 Save All Changes
           </button>
