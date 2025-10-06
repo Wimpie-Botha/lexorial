@@ -52,16 +52,12 @@ export default function CoursesPage() {
   // === Fetch Modules ===
   useEffect(() => {
     if (!session) return;
-
     const fetchModules = async () => {
       setLoading(true);
       try {
         const res = await fetch("/api/modules", {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
-
         if (!res.ok) throw new Error("Failed to fetch modules.");
         const data = await res.json();
         setModules(data.modules || []);
@@ -71,23 +67,18 @@ export default function CoursesPage() {
         setLoading(false);
       }
     };
-
     fetchModules();
   }, [session]);
 
   // === Fetch Lessons when module changes ===
   useEffect(() => {
     if (!selectedModule || !session) return;
-
     const fetchLessons = async () => {
       setLoading(true);
       try {
         const res = await fetch(`/api/lessons?moduleId=${selectedModule}`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
-
         if (!res.ok) throw new Error("Failed to fetch lessons.");
         const data = await res.json();
         setLessons(data.lessons || []);
@@ -97,26 +88,20 @@ export default function CoursesPage() {
         setLoading(false);
       }
     };
-
     fetchLessons();
   }, [selectedModule, session]);
 
   // === Fetch Lesson Content when lesson changes ===
   useEffect(() => {
     if (!selectedLesson || !session) return;
-
     const fetchLessonContent = async () => {
       setLoading(true);
       try {
         const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
-
         if (!res.ok) throw new Error("Failed to fetch lesson content.");
         const data = await res.json();
-
         setLessonContent({
           lesson_id: selectedLesson,
           video_url: data.videos?.[0]?.video_url || "",
@@ -129,7 +114,6 @@ export default function CoursesPage() {
         setLoading(false);
       }
     };
-
     fetchLessonContent();
   }, [selectedLesson, session]);
 
@@ -207,12 +191,12 @@ export default function CoursesPage() {
           ))}
         </select>
 
-        {/* === LESSON SELECT === */}
+        {/* === LESSON LIST (clickable rows) === */}
         {selectedModule && (
           <>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">
-                Select Lesson
+                Lessons
               </label>
               <button
                 onClick={addLesson}
@@ -222,27 +206,16 @@ export default function CoursesPage() {
               </button>
             </div>
 
-            <div className="flex items-center mb-4">
-              <select
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={selectedLesson}
-                onChange={(e) => setSelectedLesson(e.target.value)}
-              >
-                <option value="">-- Select a lesson --</option>
-                {lessons.map((lesson, index) => (
-                  <option key={lesson.id} value={lesson.id}>
-                    {index + 1}. {lesson.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Inline lesson title editing */}
             <ul className="mb-6 border-t border-gray-200 pt-2">
               {lessons.map((lesson, index) => (
                 <li
                   key={lesson.id}
-                  className="flex justify-between items-center border-b border-gray-100 py-2"
+                  className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all duration-200 ${
+                    selectedLesson === lesson.id
+                      ? "bg-green-50 border-green-400"
+                      : "hover:bg-gray-100"
+                  }`}
+                  onClick={() => setSelectedLesson(lesson.id)}
                 >
                   {editingLessonId === lesson.id ? (
                     <input
@@ -251,6 +224,7 @@ export default function CoursesPage() {
                       onChange={(e) =>
                         handleLessonNameChange(lesson.id, e.target.value)
                       }
+                      onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
                     <span className="text-gray-700 text-sm flex-1">
@@ -260,21 +234,30 @@ export default function CoursesPage() {
 
                   {editingLessonId === lesson.id ? (
                     <button
-                      onClick={() => setEditingLessonId(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingLessonId(null);
+                      }}
                       className="text-green-600 hover:text-green-800"
                     >
                       <Save size={16} />
                     </button>
                   ) : (
                     <button
-                      onClick={() => setEditingLessonId(lesson.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingLessonId(lesson.id);
+                      }}
                       className="text-blue-600 hover:text-blue-800"
                     >
                       <Pencil size={16} />
                     </button>
                   )}
                   <button
-                    onClick={() => deleteLesson(lesson.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteLesson(lesson.id);
+                    }}
                     className="text-red-500 hover:text-red-700 ml-3"
                   >
                     <Trash2 size={16} />
@@ -355,4 +338,3 @@ export default function CoursesPage() {
     </div>
   );
 }
-// === END OF COMPONENT ===
