@@ -392,15 +392,12 @@ useEffect(() => {
   ) : loadingContent ? (
     <p className="text-gray-500 text-sm">Loading lesson content...</p>
   ) : lessonContent ? (
-    <div className="flex flex-col space-y-2">
-      <h3 className="text-lg font-bold text-gray-800 mb-2">
-        {lessonContent.lesson.title}
-      </h3>
+    <div className="flex flex-col space-y-1">
 
       {/* === Video button === */}
       {lessonContent.videos?.length > 0 && (
         <button
-          className="flex justify-between items-center px-3 py-2 border border-gray-400 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-150 active:scale-[0.97]"
+          className="flex justify-between items-center px-4 py-2 border border-gray-400 rounded-md bg-gray-50 hover:bg-gray-100 transition-all duration-150 active:scale-[0.97]"
           onClick={() => console.log("Open video player")}
         >
           <div className="flex items-center gap-2">
