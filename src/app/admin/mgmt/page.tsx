@@ -28,6 +28,7 @@ export default function CoursesPage() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [selectedModule, setSelectedModule] = useState<string>("");
   const [selectedLesson, setSelectedLesson] = useState<string>("");
+  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonContent, setLessonContent] = useState<LessonContent>({
     lesson_id: "",
@@ -38,7 +39,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(false);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
 
-  // === 🔐 Load current Supabase session ===
+  // === 🔐 Load session ===
   useEffect(() => {
     const getSession = async () => {
       const {
@@ -49,7 +50,7 @@ export default function CoursesPage() {
     getSession();
   }, []);
 
-  // === Fetch Modules ===
+  // === Fetch modules ===
   useEffect(() => {
     if (!session) return;
     const fetchModules = async () => {
@@ -70,7 +71,7 @@ export default function CoursesPage() {
     fetchModules();
   }, [session]);
 
-  // === Fetch Lessons when module changes ===
+  // === Fetch lessons ===
   useEffect(() => {
     if (!selectedModule || !session) return;
     const fetchLessons = async () => {
@@ -91,7 +92,7 @@ export default function CoursesPage() {
     fetchLessons();
   }, [selectedModule, session]);
 
-  // === Fetch Lesson Content when lesson changes ===
+  // === Fetch lesson content ===
   useEffect(() => {
     if (!selectedLesson || !session) return;
     const fetchLessonContent = async () => {
@@ -100,7 +101,6 @@ export default function CoursesPage() {
         const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
-        if (!res.ok) throw new Error("Failed to fetch lesson content.");
         const data = await res.json();
         setLessonContent({
           lesson_id: selectedLesson,
@@ -117,11 +117,13 @@ export default function CoursesPage() {
     fetchLessonContent();
   }, [selectedLesson, session]);
 
-  // === Handle inline edit for lesson name ===
-  const handleLessonNameChange = (lessonId: string, newTitle: string) => {
-    setLessons((prev) =>
-      prev.map((l) => (l.id === lessonId ? { ...l, title: newTitle } : l))
-    );
+  // === Local edits ===
+  const handleModuleTitleChange = (id: string, title: string) => {
+    setModules((prev) => prev.map((m) => (m.id === id ? { ...m, title } : m)));
+    setUnsavedChanges(true);
+  };
+  const handleLessonTitleChange = (id: string, title: string) => {
+    setLessons((prev) => prev.map((l) => (l.id === id ? { ...l, title } : l)));
     setUnsavedChanges(true);
   };
 
@@ -131,37 +133,54 @@ export default function CoursesPage() {
     setUnsavedChanges(true);
   };
 
-  // === Add new lesson ===
+   // === Add/delete modules ===
+  const addModule = () => {
+    const newMod: Module = { id: crypto.randomUUID(), title: "New Module" };
+    setModules((prev) => [...prev, newMod]);
+    setSelectedModule(newMod.id);
+    setEditingModuleId(newMod.id); // 🟢 Immediately enable edit mode
+    setLessons([]);
+    setSelectedLesson("");
+    setUnsavedChanges(true);
+  };
+
+  const deleteModule = (id: string) => {
+    if (confirm("Delete this module and all its lessons?")) {
+      setModules((prev) => prev.filter((m) => m.id !== id));
+      if (selectedModule === id) {
+        setSelectedModule("");
+        setLessons([]);
+      }
+      setUnsavedChanges(true);
+    }
+  };
+
+  // === Add/delete lessons ===
   const addLesson = () => {
     const newLesson: Lesson = {
       id: crypto.randomUUID(),
       title: "New Lesson",
       order_index: lessons.length + 1,
     };
-    setLessons([...lessons, newLesson]);
+    setLessons((prev) => [...prev, newLesson]);
+    setSelectedLesson(newLesson.id);
+    setEditingLessonId(newLesson.id); // 🟢 Immediately enable edit mode
     setUnsavedChanges(true);
   };
 
-  // === Delete lesson ===
-  const deleteLesson = (lessonId: string) => {
-    if (confirm("Are you sure you want to delete this lesson?")) {
-      setLessons((prev) => prev.filter((l) => l.id !== lessonId));
-      if (selectedLesson === lessonId) setSelectedLesson("");
+  const deleteLesson = (id: string) => {
+    if (confirm("Delete this lesson?")) {
+      setLessons((prev) => prev.filter((l) => l.id !== id));
+      if (selectedLesson === id) setSelectedLesson("");
       setUnsavedChanges(true);
     }
   };
-
-  // === Save all changes (mock save for now) ===
-  const saveAllChanges = async () => {
-    try {
-      console.log("Saving lessons:", lessons);
-      console.log("Saving lessonContent:", lessonContent);
-      alert("✅ Changes saved locally (connect to API later)");
-      setUnsavedChanges(false);
-    } catch (err) {
-      console.error("Error saving:", err);
-      alert("❌ Error saving changes");
-    }
+  const saveAll = () => {
+    console.log("Modules:", modules);
+    console.log("Lessons:", lessons);
+    console.log("Lesson content:", lessonContent);
+    alert("✅ Changes saved locally (connect to API later)");
+    setUnsavedChanges(false);
   };
 
   return (
@@ -171,46 +190,100 @@ export default function CoursesPage() {
           Manage Courses
         </h1>
 
-        {/* === MODULE SELECT === */}
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Select Module
-        </label>
-        <select
-          className="w-full mb-4 p-2 border border-gray-300 rounded-md"
-          value={selectedModule}
-          onChange={(e) => {
-            setSelectedModule(e.target.value);
-            setSelectedLesson("");
-          }}
-        >
-          <option value="">-- Select a module --</option>
-          {modules.map((mod) => (
-            <option key={mod.id} value={mod.id}>
-              {mod.title}
-            </option>
-          ))}
-        </select>
+        {/* === MODULES === */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-gray-800">Modules</h2>
+            <button
+              onClick={addModule}
+              className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm"
+            >
+              <Plus size={14} /> Add
+            </button>
+          </div>
 
-        {/* === LESSON LIST (clickable rows) === */}
+          <ul className="border-t border-gray-200 pt-2">
+            {modules.map((mod) => (
+              <li
+                key={mod.id}
+                className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all ${
+                  selectedModule === mod.id
+                    ? "bg-green-50 border-green-400"
+                    : "hover:bg-gray-100"
+                }`}
+                onClick={() => {
+                  setSelectedModule(mod.id);
+                  setSelectedLesson("");
+                }}
+              >
+                {editingModuleId === mod.id ? (
+                  <input
+                    className="border border-gray-300 rounded-md p-1 text-sm flex-1 mr-2"
+                    value={mod.title}
+                    onChange={(e) =>
+                      handleModuleTitleChange(mod.id, e.target.value)
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span className="text-gray-700 text-sm flex-1">
+                    {mod.title}
+                  </span>
+                )}
+
+                {editingModuleId === mod.id ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingModuleId(null);
+                    }}
+                    className="text-green-600 hover:text-green-800"
+                  >
+                    <Save size={16} />
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingModuleId(mod.id);
+                    }}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteModule(mod.id);
+                  }}
+                  className="text-red-500 hover:text-red-700 ml-3"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* === LESSONS === */}
         {selectedModule && (
           <>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Lessons
-              </label>
+              <h2 className="text-lg font-semibold text-gray-800">Lessons</h2>
               <button
                 onClick={addLesson}
-                className="flex items-center gap-1 px-3 py-1 bg-green-100 border border-green-400 text-black rounded-md hover:bg-green-400 text-sm"
+                className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm"
               >
                 <Plus size={14} /> Add
               </button>
             </div>
 
             <ul className="mb-6 border-t border-gray-200 pt-2">
-              {lessons.map((lesson, index) => (
+              {lessons.map((lesson, i) => (
                 <li
                   key={lesson.id}
-                  className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all duration-200 ${
+                  className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all ${
                     selectedLesson === lesson.id
                       ? "bg-green-50 border-green-400"
                       : "hover:bg-gray-100"
@@ -222,13 +295,13 @@ export default function CoursesPage() {
                       className="border border-gray-300 rounded-md p-1 text-sm flex-1 mr-2"
                       value={lesson.title}
                       onChange={(e) =>
-                        handleLessonNameChange(lesson.id, e.target.value)
+                        handleLessonTitleChange(lesson.id, e.target.value)
                       }
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
                     <span className="text-gray-700 text-sm flex-1">
-                      {index + 1}. {lesson.title}
+                      {i + 1}. {lesson.title}
                     </span>
                   )}
 
@@ -275,61 +348,53 @@ export default function CoursesPage() {
               Lesson Content
             </h3>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                🎬 Video URL
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded-md p-2 text-sm"
-                value={lessonContent.video_url}
-                onChange={(e) =>
-                  handleContentChange("video_url", e.target.value)
-                }
-                placeholder="Enter video URL"
-              />
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              🎬 Video URL
+            </label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3"
+              value={lessonContent.video_url}
+              onChange={(e) =>
+                handleContentChange("video_url", e.target.value)
+              }
+            />
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                🧠 Geniully (Flashcards)
-              </label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded-md p-2 text-sm"
-                value={lessonContent.flashcard_url}
-                onChange={(e) =>
-                  handleContentChange("flashcard_url", e.target.value)
-                }
-                placeholder="Enter Geniully or flashcard URL"
-              />
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              🧠 Geniully (Flashcards)
+            </label>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3"
+              value={lessonContent.flashcard_url}
+              onChange={(e) =>
+                handleContentChange("flashcard_url", e.target.value)
+              }
+            />
 
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                🖼️ Slide / PNG Upload
-              </label>
-              <input
-                type="file"
-                accept=".png,.jpg,.jpeg"
-                onChange={(e) =>
-                  handleContentChange("slide_file", e.target.files?.[0] || null)
-                }
-              />
-              {lessonContent.slide_file && (
-                <p className="text-sm text-gray-600 mt-1">
-                  Selected: {lessonContent.slide_file.name}
-                </p>
-              )}
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              🖼️ Slide / PNG Upload
+            </label>
+            <input
+              type="file"
+              accept=".png,.jpg,.jpeg"
+              onChange={(e) =>
+                handleContentChange("slide_file", e.target.files?.[0] || null)
+              }
+            />
+            {lessonContent.slide_file && (
+              <p className="text-sm text-gray-600 mt-1">
+                Selected: {lessonContent.slide_file.name}
+              </p>
+            )}
           </div>
         )}
 
         {/* === SAVE BUTTON === */}
         {unsavedChanges && (
           <button
-            onClick={saveAllChanges}
-            className="mt-6 w-full bg-green-100 border border-green-500 text-black font-semibold py-2 rounded-lg hover:bg-green-300 transition-all"
+            onClick={saveAll}
+            className="mt-6 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition-all"
           >
             💾 Save All Changes
           </button>
