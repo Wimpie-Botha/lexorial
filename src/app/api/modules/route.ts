@@ -74,3 +74,86 @@ export async function GET(request: Request) {
     );
   }
 }
+
+// === POST: Add new module ===
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { title, level } = body;
+
+    if (!title)
+      return NextResponse.json({ error: "Module title required" }, { status: 400 });
+
+    const { data, error } = await supabase
+      .from("modules")
+      .insert([{ title, level }])
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ module: data }, { status: 201 });
+  } catch (err: any) {
+    console.error("Error adding module:", err.message);
+    return NextResponse.json(
+      { error: err.message || "Failed to add module" },
+      { status: 500 }
+    );
+  }
+}
+
+// === PUT: Update module title ===
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, title } = body;
+
+    if (!id || !title)
+      return NextResponse.json(
+        { error: "Module ID and title are required" },
+        { status: 400 }
+      );
+
+    const { data, error } = await supabase
+      .from("modules")
+      .update({ title })
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ module: data }, { status: 200 });
+  } catch (err: any) {
+    console.error("Error updating module:", err.message);
+    return NextResponse.json(
+      { error: err.message || "Failed to update module" },
+      { status: 500 }
+    );
+  }
+}
+
+// === DELETE: Remove module ===
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id)
+      return NextResponse.json({ error: "Module ID required" }, { status: 400 });
+
+    const { error } = await supabase.from("modules").delete().eq("id", id);
+    if (error) throw error;
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err: any) {
+    console.error("Error deleting module:", err.message);
+    return NextResponse.json(
+      { error: err.message || "Failed to delete module" },
+      { status: 500 }
+    );
+  }
+}
+
+
+
