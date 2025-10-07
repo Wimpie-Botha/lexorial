@@ -117,7 +117,7 @@ export async function POST(request: Request) {
       .from("lessons")
       .insert([{ module_id, title, order_index }])
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
 
@@ -151,7 +151,7 @@ export async function PUT(request: Request) {
       .update(updateData)
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
 

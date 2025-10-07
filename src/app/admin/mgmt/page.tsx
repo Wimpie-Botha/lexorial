@@ -39,16 +39,36 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(false);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
 
-  // === 🔐 Load session ===
-  useEffect(() => {
-    const getSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setSession(session);
-    };
-    getSession();
-  }, []);
+ // 🟢 UPDATED SECTION — persistent session handling
+useEffect(() => {
+  const getSession = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    setSession(session);
+  };
+  getSession();
+
+  // Listen for auth state changes to auto-refresh
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+  });
+
+  // Cleanup on unmount
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []);
+
+useEffect(() => {
+  if (session) {
+    console.log("✅ Session active:", session.user?.email);
+  } else {
+    console.warn("⚠️ No session found.");
+  }
+}, [session]);
 
   // === Fetch modules ===
   useEffect(() => {
@@ -101,6 +121,7 @@ export default function CoursesPage() {
         const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
+        if (!res.ok) throw new Error("Failed to fetch lesson content.");
         const data = await res.json();
         setLessonContent({
           lesson_id: selectedLesson,
@@ -133,48 +154,110 @@ export default function CoursesPage() {
     setUnsavedChanges(true);
   };
 
-   // === Add/delete modules ===
-  const addModule = () => {
-    const newMod: Module = { id: crypto.randomUUID(), title: "New Module" };
-    setModules((prev) => [...prev, newMod]);
-    setSelectedModule(newMod.id);
-    setEditingModuleId(newMod.id); // 🟢 Immediately enable edit mode
+// 🟢 UPDATED SECTION: addModule now creates module directly in DB
+const addModule = async () => {
+  if (!session) return alert("Session expired. Please log in again.");
+
+  const res = await fetch("/api/modules", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      title: "New Module",
+      description: "Edit this module description",
+      level: modules.length + 1,
+    }),
+  });
+
+  const data = await res.json();
+  if (res.ok && data.module) {
+    setModules((prev) => [...prev, data.module]);
+    setSelectedModule(data.module.id);
+    setEditingModuleId(data.module.id);
     setLessons([]);
     setSelectedLesson("");
-    setUnsavedChanges(true);
-  };
+  } else {
+    console.error("Error adding module:", data.error);
+    alert("❌ Failed to add module.");
+  }
+};
 
-  const deleteModule = (id: string) => {
-    if (confirm("Delete this module and all its lessons?")) {
-      setModules((prev) => prev.filter((m) => m.id !== id));
-      if (selectedModule === id) {
-        setSelectedModule("");
-        setLessons([]);
-      }
-      setUnsavedChanges(true);
+// 🟢 UPDATED SECTION: deleteModule now calls API route
+const deleteModule = async (id: string) => {
+  if (!confirm("Delete this module and all its lessons?")) return;
+
+  const res = await fetch("/api/modules", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id }),
+  });
+
+  if (res.ok) {
+    setModules((prev) => prev.filter((m) => m.id !== id));
+    if (selectedModule === id) {
+      setSelectedModule("");
+      setLessons([]);
     }
-  };
+  } else {
+    alert("❌ Failed to delete module.");
+  }
+};
 
-  // === Add/delete lessons ===
-  const addLesson = () => {
-    const newLesson: Lesson = {
-      id: crypto.randomUUID(),
+// 🟢 UPDATED SECTION: addLesson now inserts directly in DB
+const addLesson = async () => {
+  if (!session) return alert("Session expired. Please log in again.");
+  if (!selectedModule) return alert("Select a module first.");
+
+  const res = await fetch("/api/lessons", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      module_id: selectedModule,
       title: "New Lesson",
       order_index: lessons.length + 1,
-    };
-    setLessons((prev) => [...prev, newLesson]);
-    setSelectedLesson(newLesson.id);
-    setEditingLessonId(newLesson.id); // 🟢 Immediately enable edit mode
-    setUnsavedChanges(true);
-  };
+    }),
+  });
 
-  const deleteLesson = (id: string) => {
-    if (confirm("Delete this lesson?")) {
-      setLessons((prev) => prev.filter((l) => l.id !== id));
-      if (selectedLesson === id) setSelectedLesson("");
-      setUnsavedChanges(true);
-    }
-  };
+  const data = await res.json();
+  if (res.ok && data.lesson) {
+    setLessons((prev) => [...prev, data.lesson]);
+    setSelectedLesson(data.lesson.id);
+    setEditingLessonId(data.lesson.id);
+  } else {
+    console.error("Error adding lesson:", data.error);
+    alert("❌ Failed to add lesson.");
+  }
+};
+
+  // 🟢 UPDATED SECTION: deleteLesson now calls API route
+const deleteLesson = async (id: string) => {
+  if (!confirm("Delete this lesson?")) return;
+
+  const res = await fetch("/api/lessons", {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id }),
+  });
+
+  if (res.ok) {
+    setLessons((prev) => prev.filter((l) => l.id !== id));
+    if (selectedLesson === id) setSelectedLesson("");
+  } else {
+    alert("❌ Failed to delete lesson.");
+  }
+};
+
   const saveAll = () => {
     console.log("Modules:", modules);
     console.log("Lessons:", lessons);
@@ -182,6 +265,61 @@ export default function CoursesPage() {
     alert("✅ Changes saved locally (connect to API later)");
     setUnsavedChanges(false);
   };
+
+  // === Save all changes ===
+// 🟢 UPDATED SECTION: cleaner saveAllChanges
+const saveAllChanges = async () => {
+  try {
+    if (!session) return alert("Session expired. Please log in again.");
+
+    // === Update modules ===
+    for (const mod of modules) {
+      await fetch("/api/modules", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(mod),
+      });
+    }
+
+    // === Update lessons ===
+    for (const lesson of lessons) {
+      await fetch("/api/lessons", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(lesson),
+      });
+    }
+
+    // === Update lesson content ===
+    if (selectedLesson && lessonContent) {
+      await fetch("/api/lesson-content", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          lesson_id: selectedLesson,
+          video_url: lessonContent.video_url,
+          flashcard_url: lessonContent.flashcard_url,
+          slide_url: null,
+        }),
+      });
+    }
+
+    alert("✅ All changes saved successfully!");
+    setUnsavedChanges(false);
+  } catch (err) {
+    console.error("Error saving changes:", err);
+    alert("❌ Failed to save changes.");
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50 p-10 flex flex-col items-center">
@@ -393,10 +531,14 @@ export default function CoursesPage() {
         {/* === SAVE BUTTON === */}
         {unsavedChanges && (
           <button
-            onClick={saveAll}
+            onClick={saveAllChanges}
             className="mt-6 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition-all"
           >
             💾 Save All Changes
+
+            
+
+
           </button>
         )}
       </div>
