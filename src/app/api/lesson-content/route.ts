@@ -61,3 +61,75 @@ export async function GET(request: Request) {
     );
   }
 }
+
+// === PUT /api/lesson-content ===
+export async function PUT(request: Request) {
+  try {
+    const body = await request.text();
+    const { lesson_id, video_url, flashcard_url, slide_url } = JSON.parse(body || "{}");
+
+    if (!lesson_id) {
+      return NextResponse.json(
+        { error: "Missing required field: lesson_id" },
+        { status: 400 }
+      );
+    }
+
+    // === 🟢 1. Update or insert video
+    if (video_url) {
+      const { error: videoError } = await supabase
+        .from("videos")
+        .upsert(
+          {
+            lesson_id,
+            video_url,
+            created_at: new Date().toISOString(),
+          },
+          { onConflict: "lesson_id" } // ensures we update existing row if it exists
+        );
+
+      if (videoError) throw videoError;
+    }
+
+    // === 🟢 2. Update or insert flashcard link (if applicable)
+    if (flashcard_url) {
+      const { error: flashError } = await supabase
+        .from("flashcards")
+        .upsert(
+          {
+            lesson_id,
+            word: "Flashcard Link",
+            translation: flashcard_url,
+            created_at: new Date().toISOString(),
+          },
+          { onConflict: "lesson_id" }
+        );
+
+      if (flashError) throw flashError;
+    }
+
+    // === 🟢 3. Update or insert slide info (if applicable)
+    if (slide_url) {
+      const { error: slideError } = await supabase
+        .from("slides")
+        .upsert(
+          {
+            lesson_id,
+            slide_url,
+            created_at: new Date().toISOString(),
+          },
+          { onConflict: "lesson_id" }
+        );
+
+      if (slideError) throw slideError;
+    }
+
+    return NextResponse.json(
+      { message: "Lesson content updated successfully." },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    console.error("Error updating lesson content:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
