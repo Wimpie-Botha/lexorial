@@ -186,27 +186,42 @@ const addModule = async () => {
 
 // 🟢 UPDATED SECTION: deleteModule now calls API route
 const deleteModule = async (id: string) => {
+  if (!id) {
+    console.warn("⚠️ Tried to delete module without ID");
+    alert("❌ Cannot delete unsaved module.");
+    return;
+  }
+
+  console.log("🧩 Deleting module with ID:", id);
+
   if (!confirm("Delete this module and all its lessons?")) return;
 
-  const res = await fetch("/api/modules", {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ id }),
-  });
+  try {
+    const res = await fetch("/api/modules", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ id }),
+    });
 
-  if (res.ok) {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Unknown error");
+
     setModules((prev) => prev.filter((m) => m.id !== id));
     if (selectedModule === id) {
       setSelectedModule("");
       setLessons([]);
     }
-  } else {
+
+    alert("✅ Module deleted successfully.");
+  } catch (err: any) {
+    console.error("Error deleting module:", err.message);
     alert("❌ Failed to delete module.");
   }
 };
+
 
 // 🟢 UPDATED SECTION: addLesson now inserts directly in DB
 const addLesson = async () => {
@@ -237,23 +252,28 @@ const addLesson = async () => {
   }
 };
 
-  // 🟢 UPDATED SECTION: deleteLesson now calls API route
 const deleteLesson = async (id: string) => {
   if (!confirm("Delete this lesson?")) return;
 
-  const res = await fetch("/api/lessons", {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ id }),
-  });
+  try {
+    const res = await fetch("/api/lessons", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ id }), // 🟢 FIX: ensure JSON body
+    });
 
-  if (res.ok) {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Unknown error");
+
     setLessons((prev) => prev.filter((l) => l.id !== id));
     if (selectedLesson === id) setSelectedLesson("");
-  } else {
+
+    alert("✅ Lesson deleted successfully.");
+  } catch (err: any) {
+    console.error("Error deleting lesson:", err.message);
     alert("❌ Failed to delete lesson.");
   }
 };

@@ -136,22 +136,24 @@ export async function PUT(request: Request) {
 // === DELETE: Remove module ===
 export async function DELETE(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const body = await request.text();
+    const { id } = JSON.parse(body || "{}");
 
-    if (!id)
+    if (!id) {
       return NextResponse.json({ error: "Module ID required" }, { status: 400 });
+    }
 
     const { error } = await supabase.from("modules").delete().eq("id", id);
+
     if (error) throw error;
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json(
+      { message: "Module deleted successfully" },
+      { status: 200 }
+    );
   } catch (err: any) {
     console.error("Error deleting module:", err.message);
-    return NextResponse.json(
-      { error: err.message || "Failed to delete module" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 

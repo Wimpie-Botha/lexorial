@@ -168,21 +168,27 @@ export async function PUT(request: Request) {
 // === DELETE: Remove lesson by ID ===
 export async function DELETE(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    // 🔹 Read body safely even if DELETE body is sent as text
+    const body = await request.text();
+    const { id } = JSON.parse(body || "{}");
 
-    if (!id)
-      return NextResponse.json({ error: "Lesson ID required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json(
+        { error: "Lesson ID required" },
+        { status: 400 }
+      );
+    }
 
+    // 🔹 Delete the lesson by ID
     const { error } = await supabase.from("lessons").delete().eq("id", id);
     if (error) throw error;
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json(
+      { message: "Lesson deleted successfully." },
+      { status: 200 }
+    );
   } catch (err: any) {
     console.error("Error deleting lesson:", err.message);
-    return NextResponse.json(
-      { error: err.message || "Failed to delete lesson" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
