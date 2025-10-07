@@ -20,6 +20,7 @@ interface LessonContent {
   video_url?: string;
   flashcard_url?: string;
   slide_file?: File | null;
+  preview_url?: string | null;
 }
 
 export default function CoursesPage() {
@@ -123,6 +124,11 @@ useEffect(() => {
         });
         if (!res.ok) throw new Error("Failed to fetch lesson content.");
         const data = await res.json();
+
+        if (lessonContent["preview_url"]) {
+          URL.revokeObjectURL(lessonContent["preview_url"]);
+        }
+
         setLessonContent({
           lesson_id: selectedLesson,
           video_url: data.videos?.[0]?.video_url || "",
@@ -317,21 +323,25 @@ const saveAllChanges = async () => {
     }
 
     // === Update lesson content ===
-    if (selectedLesson && lessonContent) {
-      await fetch("/api/lesson-content", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          lesson_id: selectedLesson,
-          video_url: lessonContent.video_url,
-          flashcard_url: lessonContent.flashcard_url,
-          slide_url: null,
-        }),
-      });
-    }
+    // === Update lesson content ===
+if (selectedLesson && lessonContent) {
+  const formData = new FormData();
+  formData.append("lesson_id", selectedLesson);
+  formData.append("video_url", lessonContent.video_url || "");
+  formData.append("flashcard_url", lessonContent.flashcard_url || "");
+  if (lessonContent.slide_file) {
+    formData.append("slide_file", lessonContent.slide_file);
+  }
+
+  await fetch("/api/lesson-content", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      // ❗ Do NOT set Content-Type manually — the browser sets the correct multipart boundary automatically
+    },
+    body: formData,
+  });
+}
 
     alert("✅ All changes saved successfully!");
     setUnsavedChanges(false);
@@ -534,16 +544,37 @@ const saveAllChanges = async () => {
               🖼️ Slide / PNG Upload
             </label>
             <input
-              type="file"
-              accept=".png,.jpg,.jpeg"
-              onChange={(e) =>
-                handleContentChange("slide_file", e.target.files?.[0] || null)
-              }
-            />
-            {lessonContent.slide_file && (
-              <p className="text-sm text-gray-600 mt-1">
+                type="file"
+                accept=".png,.jpg,.jpeg"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  handleContentChange("slide_file", file);
+
+                  // 🟢 Live preview (temporary URL for local display)
+                  if (file) {
+                    const previewUrl = URL.createObjectURL(file);
+                    setLessonContent((prev) => ({
+                      ...prev,
+                      preview_url: previewUrl, // we'll add this dynamically
+                    }));
+                  }
+                }}
+              />
+                      {lessonContent.slide_file && (
+            <div className="mt-3">
+              <p className="text-sm text-gray-600 mb-1">
                 Selected: {lessonContent.slide_file.name}
               </p>
+
+                {/* 🖼️ Live Preview */}
+                {lessonContent["preview_url"] && (
+                  <img
+                    src={lessonContent["preview_url"]}
+                    alt="Slide preview"
+                    className="mt-2 rounded-md border border-gray-300 shadow-sm w-full max-h-64 object-contain"
+                  />
+                )}
+              </div>
             )}
           </div>
         )}

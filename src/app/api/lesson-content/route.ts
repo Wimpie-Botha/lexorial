@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET || "lesson-slides"; // 🟢 ADDED
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // === GET /api/lesson-content?lesson_id=xxx ===
@@ -20,11 +21,10 @@ export async function GET(request: Request) {
 
     // Fetch lesson + module info
     const { data: lessonData, error: lessonError } = await supabase
-        .from("lessons")
-        .select("id, title, intro, module_id")
-        .eq("id", lesson_id)
-        .single();
-
+      .from("lessons")
+      .select("id, title, intro, module_id")
+      .eq("id", lesson_id)
+      .single();
 
     if (lessonError) throw lessonError;
 
@@ -32,17 +32,23 @@ export async function GET(request: Request) {
     const [videos, slides, flashcards, questions] = await Promise.all([
       supabase.from("videos").select("id, video_url").eq("lesson_id", lesson_id),
       supabase.from("slides").select("id, slide_url").eq("lesson_id", lesson_id),
-      supabase.from("flashcards").select("id, word, translation, example_sentence").eq("lesson_id", lesson_id),
-      supabase.from("questions").select("id, question_text, question_type, options, correct_answer").eq("lesson_id", lesson_id),
+      supabase
+        .from("flashcards")
+        .select("id, word, translation, example_sentence")
+        .eq("lesson_id", lesson_id),
+      supabase
+        .from("questions")
+        .select(
+          "id, question_text, question_type, options, correct_answer"
+        )
+        .eq("lesson_id", lesson_id),
     ]);
 
-    // Handle possible query errors
     if (videos.error) throw videos.error;
     if (slides.error) throw slides.error;
     if (flashcards.error) throw flashcards.error;
     if (questions.error) throw questions.error;
 
-    // Return all content together
     return NextResponse.json(
       {
         lesson: lessonData,
@@ -63,10 +69,29 @@ export async function GET(request: Request) {
 }
 
 // === PUT /api/lesson-content ===
+// 🟢 CHANGED: now supports file uploads via FormData and saves to Supabase Storage
 export async function PUT(request: Request) {
   try {
-    const body = await request.text();
-    const { lesson_id, video_url, flashcard_url, slide_url } = JSON.parse(body || "{}");
+    const contentType = request.headers.get("content-type") || "";
+
+    // 🟢 Handle both JSON (no file) and FormData (with file)
+    let lesson_id = "";
+    let video_url = "";
+    let flashcard_url = "";
+    let slide_file: File | null = null;
+
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      lesson_id = body.lesson_id;
+      video_url = body.video_url;
+      flashcard_url = body.flashcard_url;
+    } else if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      lesson_id = formData.get("lesson_id") as string;
+      video_url = (formData.get("video_url") as string) || "";
+      flashcard_url = (formData.get("flashcard_url") as string) || "";
+      slide_file = formData.get("slide_file") as File | null;
+    }
 
     if (!lesson_id) {
       return NextResponse.json(
@@ -75,7 +100,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    // === 🟢 1. Update or insert video
+    // === 1. Update or insert video
     if (video_url) {
       const { error: videoError } = await supabase
         .from("videos")
@@ -85,13 +110,12 @@ export async function PUT(request: Request) {
             video_url,
             created_at: new Date().toISOString(),
           },
-          { onConflict: "lesson_id" } // ensures we update existing row if it exists
+          { onConflict: "lesson_id" }
         );
-
       if (videoError) throw videoError;
     }
 
-    // === 🟢 2. Update or insert flashcard link (if applicable)
+    // === 2. Update or insert flashcard link
     if (flashcard_url) {
       const { error: flashError } = await supabase
         .from("flashcards")
@@ -104,18 +128,33 @@ export async function PUT(request: Request) {
           },
           { onConflict: "lesson_id" }
         );
-
       if (flashError) throw flashError;
     }
 
-    // === 🟢 3. Update or insert slide info (if applicable)
-    if (slide_url) {
+    // === 3. Upload slide image to Supabase Storage (if file provided)
+    let slide_url: string | null = null;
+    if (slide_file) {
+      const filePath = `lesson-${lesson_id}/${Date.now()}-${slide_file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, slide_file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicData } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+
+      slide_url = publicData.publicUrl;
+
       const { error: slideError } = await supabase
         .from("slides")
         .upsert(
           {
             lesson_id,
             slide_url,
+            bucket: bucketName, // 🟢 requires that "bucket" column exists
+            file_path: filePath, // 🟢 requires that "file_path" column exists
             created_at: new Date().toISOString(),
           },
           { onConflict: "lesson_id" }
@@ -125,7 +164,10 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json(
-      { message: "Lesson content updated successfully." },
+      {
+        message: "Lesson content updated successfully.",
+        slide_url,
+      },
       { status: 200 }
     );
   } catch (err: any) {
