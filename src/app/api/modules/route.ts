@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       .from("modules")
       .insert([{ title, level }])
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
 
@@ -119,7 +119,7 @@ export async function PUT(request: Request) {
       .update({ title })
       .eq("id", id)
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
 
