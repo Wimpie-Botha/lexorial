@@ -69,7 +69,6 @@ export async function GET(request: Request) {
 }
 
 // === PUT /api/lesson-content ===
-// 🟢 CHANGED: now supports file uploads via FormData and saves to Supabase Storage
 export async function PUT(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
