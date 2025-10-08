@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Image, Video, Brain, HelpCircle } from "lucide-react";
 
 interface LessonContent {
-  lesson: { title: string };
+  lesson: { title: string; intro: string };
   videos: { video_url: string }[];
   slides: { slide_url: string }[];
   flashcards: { flashcard_url: string }[];
@@ -14,8 +14,8 @@ export default function LessonPage({ params }: { params: { lessonId: string } })
   const [data, setData] = useState<LessonContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<
-    "video" | "slide" | "flashcard" | "questions"
-  >("video");
+    "intro" | "video" | "slide" | "flashcard" | "questions"
+  >("intro");
 
   useEffect(() => {
     const fetchLesson = async () => {
@@ -65,6 +65,19 @@ export default function LessonPage({ params }: { params: { lessonId: string } })
             </div>
 
         <nav className="flex flex-col gap-3 p-5 text-gray-800 text-lg">
+
+            <button
+            onClick={() => setActiveSection("intro")}
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-all ${
+                activeSection === "intro"
+                ? "bg-gray-200 font-semibold"
+                : "hover:bg-gray-100"
+            }`}
+            >
+            <HelpCircle size={22} /> Introduction
+            </button>
+
+
             <button
             onClick={() => setActiveSection("slide")}
             className={`flex items-center gap-3 px-4 py-2.5 rounded-md transition-all ${
@@ -113,8 +126,21 @@ export default function LessonPage({ params }: { params: { lessonId: string } })
 
                 {/* === RIGHT CONTENT AREA === */}
                 <div className="flex-1 p-10 overflow-y-auto">
-            {activeSection === "video" && (
-            <div className="flex flex-col items-center">
+
+
+                {activeSection === "intro" && (
+                <div className="flex flex-col items-center">
+                    <h2 className="text-2xl font-semibold text-gray-700 mb-6 flex items-center gap-2">
+                    📘 Introduction
+                    </h2>
+                    <p className="text-gray-800 text-lg leading-relaxed max-w-4xl text-center">
+                    {data.lesson?.intro || "No introduction available for this lesson."}
+                    </p>
+                </div>
+                )}
+                
+                {activeSection === "video" && (
+                <div className="flex flex-col items-center">
            
                 {videoUrl ? (
                     <div className="relative w-full max-w-6xl aspect-video rounded-xl overflow-hidden shadow-lg border border-gray-300">
@@ -132,47 +158,47 @@ export default function LessonPage({ params }: { params: { lessonId: string } })
                 )}
                 </div>
                
-        )}
+                 )}
 
 
-        {activeSection === "slide" && (
-          <div>
-            {slideUrl ? (
-              <img
-                src={slideUrl}
-                alt="Lesson Slide"
-                className="w-full max-h-[500px] object-contain rounded-md border border-gray-300 shadow-sm"
-              />
-            ) : (
-              <p className="text-sm text-gray-500 italic">No slide uploaded yet.</p>
-            )}
-          </div>
-        )}
+                {activeSection === "slide" && (
+                <div>
+                    {slideUrl ? (
+                    <img
+                        src={slideUrl}
+                        alt="Lesson Slide"
+                        className="w-full max-h-[500px] object-contain rounded-md border border-gray-300 shadow-sm"
+                    />
+                    ) : (
+                    <p className="text-sm text-gray-500 italic">No slide uploaded yet.</p>
+                    )}
+                </div>
+                )}
 
-        {activeSection === "flashcard" && (
-          <div>
-            {geniallyUrl ? (
-              <div className="relative w-full max-w-4xl mx-auto" style={{ paddingTop: "56.25%" }}>
-                <iframe
-                  src={geniallyUrl}
-                  allowFullScreen
-                  className="absolute top-0 left-0 w-full h-full rounded-lg border border-gray-300 shadow-sm"
-                ></iframe>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 italic">No Genially link provided.</p>
-            )}
-          </div>
-        )}
+                {activeSection === "flashcard" && (
+                <div>
+                    {geniallyUrl ? (
+                    <div className="relative w-full max-w-4xl mx-auto" style={{ paddingTop: "56.25%" }}>
+                        <iframe
+                        src={geniallyUrl}
+                        allowFullScreen
+                        className="absolute top-0 left-0 w-full h-full rounded-lg border border-gray-300 shadow-sm"
+                        ></iframe>
+                    </div>
+                    ) : (
+                    <p className="text-sm text-gray-500 italic">No Genially link provided.</p>
+                    )}
+                </div>
+                )}
 
-        {activeSection === "questions" && (
-          <div>
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">❓ Questions</h2>
-            <p className="text-gray-500 italic">
-              (We can add question data display here later.)
-            </p>
-          </div>
-        )}
+                {activeSection === "questions" && (
+                <div>
+                    <h2 className="text-xl font-semibold text-gray-700 mb-4">❓ Questions</h2>
+                    <p className="text-gray-500 italic">
+                    (We can add question data display here later.)
+                    </p>
+                </div>
+                )}
       </div>
     </div>
   );
