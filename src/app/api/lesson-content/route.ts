@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       supabase.from("slides").select("id, slide_url").eq("lesson_id", lesson_id),
       supabase
         .from("flashcards")
-        .select("id, word, translation, example_sentence")
+        .select("id, lesson_id, flashcard_url")
         .eq("lesson_id", lesson_id),
       supabase
         .from("questions")
@@ -131,8 +131,7 @@ export async function PUT(request: Request) {
         .upsert(
           {
             lesson_id,
-            word: "Flashcard Link",
-            translation: flashcard_url,
+            flashcard_url: flashcard_url,
             created_at: new Date().toISOString(),
           },
           { onConflict: "lesson_id" }
@@ -163,44 +162,44 @@ export async function PUT(request: Request) {
       }
 
       //Upload new file
-  const filePath = `lesson-${lesson_id}/${Date.now()}-${slide_file.name}`;
-  const { error: uploadError } = await supabase.storage
-    .from(bucketName)
-    .upload(filePath, slide_file, { upsert: true });
+        const filePath = `lesson-${lesson_id}/${Date.now()}-${slide_file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, slide_file, { upsert: true });
 
-      if (uploadError) throw uploadError;
+            if (uploadError) throw uploadError;
 
-      const { data: publicData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
+            const { data: publicData } = supabase.storage
+              .from(bucketName)
+              .getPublicUrl(filePath);
 
-      slide_url = publicData.publicUrl;
+            slide_url = publicData.publicUrl;
 
-      const { error: slideError } = await supabase
-        .from("slides")
-        .upsert(
-          {
-            lesson_id,
-            slide_url,
-            bucket: bucketName, 
-            file_path: filePath, 
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: "lesson_id" }
-        );
+            const { error: slideError } = await supabase
+              .from("slides")
+              .upsert(
+                {
+                  lesson_id,
+                  slide_url,
+                  bucket: bucketName, 
+                  file_path: filePath, 
+                  created_at: new Date().toISOString(),
+                },
+                { onConflict: "lesson_id" }
+              );
 
-      if (slideError) throw slideError;
-    }
+            if (slideError) throw slideError;
+          }
 
-    return NextResponse.json(
-      {
-        message: "Lesson content updated successfully.",
-        slide_url,
-      },
-      { status: 200 }
-    );
-  } catch (err: any) {
-    console.error("Error updating lesson content:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+          return NextResponse.json(
+            {
+              message: "Lesson content updated successfully.",
+              slide_url,
+            },
+            { status: 200 }
+          );
+        } catch (err: any) {
+          console.error("Error updating lesson content:", err.message);
+          return NextResponse.json({ error: err.message }, { status: 500 });
+        }
 }
