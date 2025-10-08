@@ -3,8 +3,17 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET || "lesson-slides"; // 🟢 ADDED
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET || "lesson-slides";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // Use service role for elevated privileges
+);
+
+const ALLOWED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg"];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+
 
 // === GET /api/lesson-content?lesson_id=xxx ===
 export async function GET(request: Request) {
@@ -69,11 +78,12 @@ export async function GET(request: Request) {
 }
 
 // === PUT /api/lesson-content ===
+//supports file uploads via FormData and saves to Supabase Storage
 export async function PUT(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
 
-    // 🟢 Handle both JSON (no file) and FormData (with file)
+    //Handle both JSON (no file) and FormData (with file)
     let lesson_id = "";
     let video_url = "";
     let flashcard_url = "";
@@ -133,10 +143,30 @@ export async function PUT(request: Request) {
     // === 3. Upload slide image to Supabase Storage (if file provided)
     let slide_url: string | null = null;
     if (slide_file) {
-      const filePath = `lesson-${lesson_id}/${Date.now()}-${slide_file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, slide_file, { upsert: true });
+      //Validate file
+      if (!ALLOWED_TYPES.includes(slide_file.type)) {
+        return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
+      }
+      if (slide_file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: "File too large (max 5 MB)" }, { status: 400 });
+      }
+
+      //Delete old file if it exists
+      const { data: existingSlide } = await supabase
+        .from("slides")
+        .select("file_path")
+        .eq("lesson_id", lesson_id)
+        .single();
+
+      if (existingSlide?.file_path) {
+        await supabase.storage.from(bucketName).remove([existingSlide.file_path]);
+      }
+
+      //Upload new file
+  const filePath = `lesson-${lesson_id}/${Date.now()}-${slide_file.name}`;
+  const { error: uploadError } = await supabase.storage
+    .from(bucketName)
+    .upload(filePath, slide_file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
@@ -152,8 +182,8 @@ export async function PUT(request: Request) {
           {
             lesson_id,
             slide_url,
-            bucket: bucketName, // 🟢 requires that "bucket" column exists
-            file_path: filePath, // 🟢 requires that "file_path" column exists
+            bucket: bucketName, 
+            file_path: filePath, 
             created_at: new Date().toISOString(),
           },
           { onConflict: "lesson_id" }

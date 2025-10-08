@@ -31,6 +31,8 @@ export default function CoursesPage() {
   const [selectedLesson, setSelectedLesson] = useState<string>("");
   const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   const [lessonContent, setLessonContent] = useState<LessonContent>({
     lesson_id: "",
     video_url: "",
@@ -39,6 +41,10 @@ export default function CoursesPage() {
   });
   const [loading, setLoading] = useState(false);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
+
+
+
+
 
  // 🟢 UPDATED SECTION — persistent session handling
 useEffect(() => {
@@ -62,6 +68,7 @@ useEffect(() => {
     subscription.unsubscribe();
   };
 }, []);
+
 
 useEffect(() => {
   if (session) {
@@ -114,35 +121,46 @@ useEffect(() => {
   }, [selectedModule, session]);
 
   // === Fetch lesson content ===
-  useEffect(() => {
-    if (!selectedLesson || !session) return;
-    const fetchLessonContent = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!res.ok) throw new Error("Failed to fetch lesson content.");
-        const data = await res.json();
+// === Fetch lesson content (includes image preview) ===
+useEffect(() => {
+  if (!selectedLesson || !session) return;
 
-        if (lessonContent["preview_url"]) {
-          URL.revokeObjectURL(lessonContent["preview_url"]);
-        }
+  const fetchLessonContent = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch lesson content.");
+      const data = await res.json();
 
-        setLessonContent({
-          lesson_id: selectedLesson,
-          video_url: data.videos?.[0]?.video_url || "",
-          flashcard_url: data.flashcards?.[0]?.flashcard_url || "",
-          slide_file: null,
-        });
-      } catch (err) {
-        console.error("Error fetching lesson content:", err);
-      } finally {
-        setLoading(false);
+      if (lessonContent["preview_url"]) {
+        URL.revokeObjectURL(lessonContent["preview_url"]);
       }
-    };
-    fetchLessonContent();
-  }, [selectedLesson, session]);
+
+      setLessonContent({
+        lesson_id: selectedLesson,
+        video_url: data.videos?.[0]?.video_url || "",
+        flashcard_url: data.flashcards?.[0]?.flashcard_url || "",
+        slide_file: null,
+      });
+
+      //preload existing slide from DB
+      if (data.slides && data.slides.length > 0 && data.slides[0].slide_url) {
+        setPreviewImage(data.slides[0].slide_url);
+      } else {
+        setPreviewImage(null);
+      }
+    } catch (err) {
+      console.error("Error fetching lesson content:", err);
+      setPreviewImage(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchLessonContent();
+}, [selectedLesson, session]);
 
   // === Local edits ===
   const handleModuleTitleChange = (id: string, title: string) => {
@@ -308,6 +326,16 @@ const saveAllChanges = async () => {
         },
         body: JSON.stringify(mod),
       });
+
+      await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.slides && data.slides[0]?.slide_url) {
+          setPreviewImage(data.slides[0].slide_url);
+        }
+      });
+
+
     }
 
     // === Update lessons ===
@@ -322,7 +350,6 @@ const saveAllChanges = async () => {
       });
     }
 
-    // === Update lesson content ===
     // === Update lesson content ===
 if (selectedLesson && lessonContent) {
   const formData = new FormData();
@@ -560,6 +587,25 @@ if (selectedLesson && lessonContent) {
                   }
                 }}
               />
+
+
+              {/* 🖼️ Existing Slide Preview */}
+              {previewImage ? (
+                <div className="mt-3">
+                  <p className="text-sm text-gray-400">Current Slide:</p>
+                  <img
+                    src={previewImage}
+                    alt="Lesson slide preview"
+                    className="w-48 h-32 object-cover rounded-lg border border-gray-600 shadow-md"
+                  />
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-gray-500 italic">
+                  No slide uploaded yet for this lesson.
+                </p>
+              )}
+
+
                       {lessonContent.slide_file && (
             <div className="mt-3">
               <p className="text-sm text-gray-600 mb-1">
@@ -579,6 +625,7 @@ if (selectedLesson && lessonContent) {
           </div>
         )}
 
+
         {/* === SAVE BUTTON === */}
         {unsavedChanges && (
           <button
@@ -586,10 +633,6 @@ if (selectedLesson && lessonContent) {
             className="mt-6 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition-all"
           >
             💾 Save All Changes
-
-            
-
-
           </button>
         )}
       </div>
