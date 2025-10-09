@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
   LogOut,
@@ -11,6 +12,7 @@ import {
   Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import router from "next/dist/shared/lib/router/router";
 
 // === Types ===
 interface Module {
@@ -49,7 +51,11 @@ export default function HomePage() {
   const [userLevelLesson, setUserLevelLesson] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
+
   const [view, setView] = useState<"modules" | "lessons" | "content">("modules");
+
+
 
   // 🔐 Get Supabase session
   useEffect(() => {
@@ -151,11 +157,38 @@ export default function HomePage() {
     fetchContent();
   }, [selectedLesson]);
 
-  // === LOGOUT ===
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/auth/login";
-  };
+
+// 🖱️ Handle Mouse Back Button Navigation
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // Go back one level in your custom views
+      if (view === "content") {
+        setView("lessons");
+      } else if (view === "lessons") {
+        setView("modules");
+      } else if (view === "modules") {
+        // optional: if you're already at modules, you can navigate home or stay put
+        window.history.pushState(null, "", "/");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    // push state on every view change so browser “back” has something to pop
+    window.history.pushState({ view }, "");
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [view]);
+
+
+    // === LOGOUT ===
+    const handleLogout = async () => {
+      await supabase.auth.signOut();
+      window.location.href = "/auth/login";
+    };
+
 
   // === Animation variants ===
   const fadeSlide = {
@@ -358,9 +391,9 @@ export default function HomePage() {
                           disabled={!lesson.is_unlocked}
                           className={`w-full flex justify-between items-center px-4 py-3 rounded-xl border transition-all ${
                             isCompleted
-                              ? "bg-green-50 border-green-400 text-green-700"
+                              ? "bg-green-50 border-green-400 text-green-700  hover:bg-green-100"
                               : isActive
-                              ? "bg-gray-100 border-gray-300"
+                              ? "bg-gray-100 border-gray-300  hover:bg-purple-100"
                               : "bg-white border-gray-200"
                           } ${
                             !lesson.is_unlocked
@@ -407,7 +440,7 @@ export default function HomePage() {
                 ) : lessonContent ? (
                   <div className="space-y-2">
                     {lessonContent.videos?.length > 0 && (
-                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white hover:bg-green-50 transition-all">
+                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white transition-all">
                         <span className="flex items-center gap-2 font-semibold text-sm">
                           🎬 Video Lesson
                         </span>
@@ -417,7 +450,7 @@ export default function HomePage() {
                       </button>
                     )}
                     {lessonContent.slides?.length > 0 && (
-                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white hover:bg-blue-50 transition-all">
+                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white transition-all">
                         <span className="flex items-center gap-2 font-semibold text-sm">
                           📑 Slides
                         </span>
@@ -427,7 +460,7 @@ export default function HomePage() {
                       </button>
                     )}
                     {lessonContent.flashcards?.length > 0 && (
-                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white hover:bg-yellow-50 transition-all">
+                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white transition-all">
                         <span className="flex items-center gap-2 font-semibold text-sm">
                           🧠 Flashcards
                         </span>
@@ -437,7 +470,7 @@ export default function HomePage() {
                       </button>
                     )}
                     {lessonContent.questions?.length > 0 && (
-                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white hover:bg-purple-50 transition-all">
+                      <button className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-white transition-all">
                         <span className="flex items-center gap-2 font-semibold text-sm">
                           ❓ Questions
                         </span>
@@ -445,8 +478,31 @@ export default function HomePage() {
                           {lessonContent.questions.length} question(s)
                         </span>
                       </button>
-                    )}
-                  </div>
+                    )}  
+
+                    {/* === CHECK IF CONTENT EXISTS === */}
+                      {(
+                        lessonContent.videos?.length > 0 ||
+                        lessonContent.slides?.length > 0 ||
+                        lessonContent.flashcards?.length > 0 ||
+                        lessonContent.questions?.length > 0
+                      ) ? (
+                        <div className="pt-6 flex justify-center">
+                          <button
+                            onClick={() => {
+                              if (selectedLesson) router.push(`/lesson/${selectedLesson}`);
+                            }}
+                            className="w-full flex justify-between items-center px-4 py-3 rounded-xl border bg-purple-50 hover:bg-purple-100 transition-all"
+                          >
+                            Open Full Lesson View
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-center text-gray-500 italic pt-6">
+                          📘 Content coming soon!
+                        </p>
+                      )}
+                    </div>
                 ) : (
                   <p className="text-gray-500 italic">
                     No content found for this lesson.
@@ -460,3 +516,6 @@ export default function HomePage() {
     </div>
   );
 }
+
+
+//
