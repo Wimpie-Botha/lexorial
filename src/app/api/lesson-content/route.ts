@@ -21,14 +21,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const lesson_id = searchParams.get("lesson_id");
 
-    if (!lesson_id) {
-      return NextResponse.json(
-        { error: "Missing lesson_id parameter" },
-        { status: 400 }
-      );
-    }
+    if (!lesson_id)
+      return NextResponse.json({ error: "Missing lesson_id" }, { status: 400 });
 
-    // Fetch lesson + module info
+    // Fetch lesson base info
     const { data: lessonData, error: lessonError } = await supabase
       .from("lessons")
       .select("id, title, intro, module_id")
@@ -37,20 +33,19 @@ export async function GET(request: Request) {
 
     if (lessonError) throw lessonError;
 
-    // Fetch all linked content in parallel for speed
+    // Fetch videos, slides, flashcards
     const [videos, slides, flashcards, questions] = await Promise.all([
       supabase.from("videos").select("id, video_url").eq("lesson_id", lesson_id),
       supabase.from("slides").select("id, slide_url").eq("lesson_id", lesson_id),
       supabase
         .from("flashcards")
-        .select("id, lesson_id, flashcard_url")
+        .select("id, flashcard_url")
         .eq("lesson_id", lesson_id),
       supabase
         .from("questions")
-        .select(
-          "id, question_text, question_type, options, correct_answer"
-        )
-        .eq("lesson_id", lesson_id),
+        .select("id, question_text, question_type, order_index, created_at")
+        .eq("lesson_id", lesson_id)
+        .order("order_index", { ascending: true }),
     ]);
 
     if (videos.error) throw videos.error;
@@ -58,13 +53,38 @@ export async function GET(request: Request) {
     if (flashcards.error) throw flashcards.error;
     if (questions.error) throw questions.error;
 
+    // Enrich questions with their answers/choices
+    const enrichedQuestions = await Promise.all(
+      questions.data.map(async (q) => {
+        if (q.question_type === "multiple_choice") {
+          const { data: choices, error } = await supabase
+            .from("question_choices")
+            .select("id, choice_text, is_correct, order_index")
+            .eq("question_id", q.id)
+            .order("order_index", { ascending: true });
+          if (error) throw error;
+          return { ...q, choices };
+        } else if (q.question_type === "long_form") {
+          const { data: answers, error } = await supabase
+            .from("question_long_answers")
+            .select("id, accepted_answer")
+            .eq("question_id", q.id);
+          if (error) throw error;
+          return { ...q, accepted_answers: answers };
+        } else {
+          return q;
+        }
+      })
+    );
+
+    // Return all combined lesson content
     return NextResponse.json(
       {
         lesson: lessonData,
         videos: videos.data,
         slides: slides.data,
         flashcards: flashcards.data,
-        questions: questions.data,
+        questions: enrichedQuestions,
       },
       { status: 200 }
     );

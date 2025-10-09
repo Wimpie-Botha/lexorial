@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { Pencil, Save, Trash2, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Settings, LogOut, Home, HelpCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 
 interface Module {
@@ -43,6 +44,7 @@ export default function CoursesPage() {
   const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [view, setView] = useState<"courses" | "questions">("courses");
 
   const [lessonContent, setLessonContent] = useState<LessonContent>({
     lesson_id: "",
@@ -425,17 +427,25 @@ if (selectedLesson && lessonContent) {
 
         <div className="space-y-2">
           <button
-            onClick={() => router.push("/admin/courses")}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-green-100 text-green-700"
+            onClick={() => setView("courses")}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+              view === "courses"
+                ? "bg-green-100 text-green-700"
+                : "hover:bg-gray-100 text-gray-700"
+            }`}
           >
-            <Home size={16} /> Main Page
+            <Home size={16} /> Manage Courses
           </button>
 
           <button
-            disabled
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-gray-400 cursor-not-allowed"
+            onClick={() => setView("questions")}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+              view === "questions"
+                ? "bg-green-100 text-green-700"
+                : "hover:bg-gray-100 text-gray-700"
+            }`}
           >
-            <HelpCircle size={16} /> Questions (WIP)
+            <HelpCircle size={16} /> Questions
           </button>
 
           <button className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-100 text-gray-700">
@@ -455,130 +465,66 @@ if (selectedLesson && lessonContent) {
     {/* === MAIN CONTENT AREA === */}
     <div className="flex-1 p-10 flex flex-col items-center overflow-y-auto">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-          Manage Courses
-        </h1>
-
-        {/* === MODULES === */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-800">Modules</h2>
-            <button
-              onClick={addModule}
-              className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm"
+        <AnimatePresence mode="wait">
+          {view === "courses" && (
+            <motion.div
+              key="courses"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.25 }}
             >
-              <Plus size={14} /> Add
-            </button>
-          </div>
+              {/* === MANAGE COURSES === */}
+              <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+                Manage Courses
+              </h1>
 
-          <ul className="border-t border-gray-200 pt-2">
-            {modules.map((mod) => (
-              <li
-                key={mod.id}
-                className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all ${
-                  selectedModule === mod.id
-                    ? "bg-green-50 border-green-400"
-                    : "hover:bg-gray-100"
-                }`}
-                onClick={() => {
-                  setSelectedModule(mod.id);
-                  setSelectedLesson("");
-                }}
-              >
-                {editingModuleId === mod.id ? (
-                  <input
-                    className="border border-gray-300 rounded-md p-1 text-sm flex-1 mr-2"
-                    value={mod.title}
-                    onChange={(e) =>
-                      handleModuleTitleChange(mod.id, e.target.value)
-                    }
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <span className="text-gray-700 text-sm flex-1">
-                    {mod.title}
-                  </span>
-                )}
-
-                {editingModuleId === mod.id ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingModuleId(null);
-                    }}
-                    className="text-green-600 hover:text-green-800"
-                  >
-                    <Save size={16} />
-                  </button>
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingModuleId(mod.id);
-                    }}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    <Pencil size={16} />
-                  </button>
-                )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteModule(mod.id);
-                  }}
-                  className="text-red-500 hover:text-red-700 ml-3"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* === LESSONS === */}
-        {selectedModule && (
-          <>
+          {/* === MODULES === */}
+          <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold text-gray-800">Lessons</h2>
+              <h2 className="text-lg font-semibold text-gray-800">Modules</h2>
               <button
-                onClick={addLesson}
+                onClick={addModule}
                 className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm"
               >
                 <Plus size={14} /> Add
               </button>
             </div>
 
-            <ul className="mb-6 border-t border-gray-200 pt-2">
-              {lessons.map((lesson, i) => (
+            <ul className="border-t border-gray-200 pt-2">
+              {modules.map((mod) => (
                 <li
-                  key={lesson.id}
+                  key={mod.id}
                   className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all ${
-                    selectedLesson === lesson.id
+                    selectedModule === mod.id
                       ? "bg-green-50 border-green-400"
                       : "hover:bg-gray-100"
                   }`}
-                  onClick={() => setSelectedLesson(lesson.id)}
+                  onClick={() => {
+                    setSelectedModule(mod.id);
+                    setSelectedLesson("");
+                  }}
                 >
-                  {editingLessonId === lesson.id ? (
+                  {editingModuleId === mod.id ? (
                     <input
                       className="border border-gray-300 rounded-md p-1 text-sm flex-1 mr-2"
-                      value={lesson.title}
+                      value={mod.title}
                       onChange={(e) =>
-                        handleLessonTitleChange(lesson.id, e.target.value)
+                        handleModuleTitleChange(mod.id, e.target.value)
                       }
                       onClick={(e) => e.stopPropagation()}
                     />
                   ) : (
                     <span className="text-gray-700 text-sm flex-1">
-                      {i + 1}. {lesson.title}
+                      {mod.title}
                     </span>
                   )}
 
-                  {editingLessonId === lesson.id ? (
+                  {editingModuleId === mod.id ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditingLessonId(null);
+                        setEditingModuleId(null);
                       }}
                       className="text-green-600 hover:text-green-800"
                     >
@@ -588,7 +534,7 @@ if (selectedLesson && lessonContent) {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditingLessonId(lesson.id);
+                        setEditingModuleId(mod.id);
                       }}
                       className="text-blue-600 hover:text-blue-800"
                     >
@@ -598,7 +544,7 @@ if (selectedLesson && lessonContent) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteLesson(lesson.id);
+                      deleteModule(mod.id);
                     }}
                     className="text-red-500 hover:text-red-700 ml-3"
                   >
@@ -607,27 +553,99 @@ if (selectedLesson && lessonContent) {
                 </li>
               ))}
             </ul>
-          </>
-        )}
+          </div>
 
-        {/* === LESSON CONTENT === */}
-        {selectedLesson && (
-          <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Lesson Content
-            </h3>
+          {/* === LESSONS === */}
+          {selectedModule && (
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-semibold text-gray-800">Lessons</h2>
+                <button
+                  onClick={addLesson}
+                  className="flex items-center gap-1 px-3 py-1 bg-green-500 text-white rounded-md hover:bg-green-600 text-sm"
+                >
+                  <Plus size={14} /> Add
+                </button>
+              </div>
 
+              <ul className="mb-6 border-t border-gray-200 pt-2">
+                {lessons.map((lesson, i) => (
+                  <li
+                    key={lesson.id}
+                    className={`flex justify-between items-center border-b border-gray-100 py-2 px-2 rounded-md transition-all ${
+                      selectedLesson === lesson.id
+                        ? "bg-green-50 border-green-400"
+                        : "hover:bg-gray-100"
+                    }`}
+                    onClick={() => setSelectedLesson(lesson.id)}
+                  >
+                    {editingLessonId === lesson.id ? (
+                      <input
+                        className="border border-gray-300 rounded-md p-1 text-sm flex-1 mr-2"
+                        value={lesson.title}
+                        onChange={(e) =>
+                          handleLessonTitleChange(lesson.id, e.target.value)
+                        }
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span className="text-gray-700 text-sm flex-1">
+                        {i + 1}. {lesson.title}
+                      </span>
+                    )}
 
-            {/* 📝 Description (Intro) */}
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              📝 Description (Intro)
-            </label>
-            <textarea
-              className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3 min-h-[100px]"
-              placeholder="Enter a short description or introduction for this lesson..."
-              value={lessons.find((l) => l.id === selectedLesson)?.intro || ""}
-              onChange={(e) => handleIntroChange(e.target.value)}
-            />
+                    {editingLessonId === lesson.id ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingLessonId(null);
+                        }}
+                        className="text-green-600 hover:text-green-800"
+                      >
+                        <Save size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingLessonId(lesson.id);
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteLesson(lesson.id);
+                      }}
+                      className="text-red-500 hover:text-red-700 ml-3"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {/* === LESSON CONTENT === */}
+          {selectedLesson && (
+            <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                Lesson Content
+              </h3>
+
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                📝 Description (Intro)
+              </label>
+              <textarea
+                className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3 min-h-[100px]"
+                placeholder="Enter a short description or introduction for this lesson..."
+                value={lessons.find((l) => l.id === selectedLesson)?.intro || ""}
+                onChange={(e) => handleIntroChange(e.target.value)}
+              />
 
             <label className="block text-sm font-medium text-gray-700 mb-1">
               🎬 Video URL
@@ -713,16 +731,88 @@ if (selectedLesson && lessonContent) {
 
 
         {/* === SAVE BUTTON === */}
-        {unsavedChanges && (
-          <button
-            onClick={saveAllChanges}
-            className="mt-6 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition-all"
-          >
-            💾 Save All Changes
-          </button>
-        )}
-    </div>
-    </div>
+       {unsavedChanges && (
+            <button
+              onClick={saveAllChanges}
+              className="mt-6 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition-all"
+            >
+              💾 Save All Changes
+            </button>
+          )}
+        </motion.div>
+      )}
+
+      {/* === QUESTIONS VIEW === */}
+      {view === "questions" && (
+        <motion.div
+          key="questions"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.25 }}
+        >
+          <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            Manage Questions
+          </h1>
+
+          <div className="space-y-4">
+            <p className="text-gray-500">
+              Select a module and lesson to manage questions.
+            </p>
+
+            {/* Module dropdown */}
+            <div>
+              <label className="text-sm font-medium text-gray-700">Module</label>
+              <select
+                className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                value={selectedModule}
+                onChange={(e) => setSelectedModule(e.target.value)}
+              >
+                <option value="">Select Module</option>
+                {modules.map((mod) => (
+                  <option key={mod.id} value={mod.id}>
+                    {mod.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Lesson dropdown */}
+            {selectedModule && (
+              <div>
+                <label className="text-sm font-medium text-gray-700">Lesson</label>
+                <select
+                  className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                  value={selectedLesson}
+                  onChange={(e) => setSelectedLesson(e.target.value)}
+                >
+                  <option value="">Select Lesson</option>
+                  {lessons.map((lesson) => (
+                    <option key={lesson.id} value={lesson.id}>
+                      {lesson.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Add question placeholder */}
+            {selectedLesson && (
+              <div className="mt-6">
+                <button className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600">
+                  + Add Question
+                </button>
+                <p className="text-gray-500 mt-3 italic">
+                  (Questions editor coming next…)
+                </p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   </div>
-);
-}
+</div> 
+</div>
+  );
+}       
