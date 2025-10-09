@@ -1,8 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { Pencil, Save, Trash2, Plus } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { Settings, LogOut, Home, HelpCircle } from "lucide-react";
+
 
 interface Module {
   id: string;
@@ -22,6 +25,14 @@ interface LessonContent {
   slide_file?: File | null;
   preview_url?: string | null;
 }
+
+interface Lesson {
+  id: string;
+  title: string;
+  order_index?: number;
+  intro?: string; 
+}
+
 
 export default function CoursesPage() {
   const [session, setSession] = useState<any>(null);
@@ -172,6 +183,17 @@ useEffect(() => {
     setUnsavedChanges(true);
   };
 
+  const handleIntroChange = (value: string) => {
+  setLessons((prevLessons) =>
+    prevLessons.map((lesson) =>
+      lesson.id === selectedLesson
+        ? { ...lesson, intro: value } // update the intro for the selected lesson
+        : lesson
+    )
+  );
+  setUnsavedChanges(true); // mark unsaved changes so Save button appears
+};
+
   // === Handle lesson content change ===
   const handleContentChange = (field: keyof LessonContent, value: any) => {
     setLessonContent((prev) => ({ ...prev, [field]: value }));
@@ -310,6 +332,13 @@ const deleteLesson = async (id: string) => {
     setUnsavedChanges(false);
   };
 
+
+  const router = useRouter();
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+  };
+
   // === Save all changes ===
 // 🟢 UPDATED SECTION: cleaner saveAllChanges
 const saveAllChanges = async () => {
@@ -379,7 +408,52 @@ if (selectedLesson && lessonContent) {
 };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-10 flex flex-col items-center">
+  <div className="flex h-screen bg-gray-50">
+    {/* === SIDEBAR === */}
+    <aside className="w-64 border-r border-gray-200 flex flex-col justify-between py-6 px-4 shadow-md bg-white">
+      <div>
+        <div className="flex flex-col items-center mb-6">
+          <img
+            src={`https://ui-avatars.com/api/?name=${session?.user?.email || "Admin"}&background=24C655&color=fff`}
+            alt="Profile"
+            className="w-16 h-16 rounded-full shadow-sm mb-3"
+          />
+          <p className="text-gray-700 font-medium text-sm text-center truncate w-full">
+            {session?.user?.email}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <button
+            onClick={() => router.push("/admin/courses")}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-green-100 text-green-700"
+          >
+            <Home size={16} /> Main Page
+          </button>
+
+          <button
+            disabled
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-gray-400 cursor-not-allowed"
+          >
+            <HelpCircle size={16} /> Questions (WIP)
+          </button>
+
+          <button className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-gray-100 text-gray-700">
+            <Settings size={16} /> Settings
+          </button>
+        </div>
+      </div>
+
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50"
+      >
+        <LogOut size={16} /> Logout
+      </button>
+    </aside>
+
+    {/* === MAIN CONTENT AREA === */}
+    <div className="flex-1 p-10 flex flex-col items-center overflow-y-auto">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
         <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
           Manage Courses
@@ -543,6 +617,18 @@ if (selectedLesson && lessonContent) {
               Lesson Content
             </h3>
 
+
+            {/* 📝 Description (Intro) */}
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              📝 Description (Intro)
+            </label>
+            <textarea
+              className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3 min-h-[100px]"
+              placeholder="Enter a short description or introduction for this lesson..."
+              value={lessons.find((l) => l.id === selectedLesson)?.intro || ""}
+              onChange={(e) => handleIntroChange(e.target.value)}
+            />
+
             <label className="block text-sm font-medium text-gray-700 mb-1">
               🎬 Video URL
             </label>
@@ -635,7 +721,8 @@ if (selectedLesson && lessonContent) {
             💾 Save All Changes
           </button>
         )}
-      </div>
     </div>
-  );
+    </div>
+  </div>
+);
 }

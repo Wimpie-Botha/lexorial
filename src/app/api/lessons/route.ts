@@ -131,20 +131,24 @@ export async function POST(request: Request) {
   }
 }
 
-// === PUT: Update lesson title or order_index ===
+
+// === PUT: Update lesson title, order_index, or intro ===
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, title, order_index } = body;
+    const { id, title, order_index, intro } = body; // 🟢 include intro
 
-    if (!id || !title)
+    if (!id)
       return NextResponse.json(
-        { error: "Lesson ID and title are required" },
+        { error: "Lesson ID is required" },
         { status: 400 }
       );
 
-    const updateData: any = { title };
+    // Build dynamic update object
+    const updateData: any = {};
+    if (title !== undefined) updateData.title = title;
     if (order_index !== undefined) updateData.order_index = order_index;
+    if (intro !== undefined) updateData.intro = intro; // 🟢 add intro
 
     const { data, error } = await supabase
       .from("lessons")
@@ -164,6 +168,7 @@ export async function PUT(request: Request) {
     );
   }
 }
+
 
 // === DELETE: Remove lesson by ID ===
 export async function DELETE(request: Request) {
