@@ -8,6 +8,7 @@ import { Settings, LogOut, Home, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 
+
 interface Module {
   id: string;
   title: string;
@@ -45,6 +46,15 @@ export default function CoursesPage() {
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [view, setView] = useState<"courses" | "questions">("courses");
+
+  //question states
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [newQuestionText, setNewQuestionText] = useState("");
+  const [newQuestionType, setNewQuestionType] = useState<"multiple" | "long">("multiple");
+  const [choices, setChoices] = useState<{ choice_text: string; is_correct: boolean }[]>([]);
+  const [answers, setAnswers] = useState<string[]>([]);
+
 
   const [lessonContent, setLessonContent] = useState<LessonContent>({
     lesson_id: "",
@@ -174,6 +184,28 @@ useEffect(() => {
 
   fetchLessonContent();
 }, [selectedLesson, session]);
+
+
+
+    // === Fetch Questions for selected lesson ===
+    useEffect(() => {
+      if (!selectedLesson || !session) return;
+
+      const fetchQuestions = async () => {
+        try {
+          const res = await fetch(`/api/lesson-content?lesson_id=${selectedLesson}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          const data = await res.json();
+          setQuestions(data.questions || []);
+        } catch (err) {
+          console.error("Error fetching questions:", err);
+        }
+      };
+
+      fetchQuestions();
+    }, [selectedLesson, session]);
+
 
   // === Local edits ===
   const handleModuleTitleChange = (id: string, title: string) => {
@@ -340,6 +372,44 @@ const deleteLesson = async (id: string) => {
     await supabase.auth.signOut();
     router.push("/auth/login");
   };
+
+
+    const addQuestion = async () => {
+    if (!selectedLesson || !session) return alert("Select a lesson first.");
+
+    try {
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          lesson_id: selectedLesson,
+          question_text: newQuestionText,
+          question_type: newQuestionType,
+          choices: newQuestionType === "multiple" ? choices : [],
+          accepted_answers: newQuestionType === "long" ? answers : [],
+        }),
+      });
+
+      console.log("🟣 Sending question:", newQuestionType);
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add question");
+
+      setQuestions((prev) => [...prev, data.question]);
+      setNewQuestionText("");
+      setChoices([]);
+      setAnswers([]);
+      alert("✅ Question added!");
+    } catch (err: any) {
+      console.error("Error adding question:", err.message);
+      alert("❌ Failed to add question.");
+    }
+  };
+
+
 
   // === Save all changes ===
 // 🟢 UPDATED SECTION: cleaner saveAllChanges
@@ -796,15 +866,146 @@ if (selectedLesson && lessonContent) {
               </div>
             )}
 
-            {/* Add question placeholder */}
+
+
             {selectedLesson && (
               <div className="mt-6">
-                <button className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600">
-                  + Add Question
-                </button>
-                <p className="text-gray-500 mt-3 italic">
-                  (Questions editor coming next…)
-                </p>
+                {/* Add Question Section */}
+                <div className="bg-gray-50 p-4 rounded-md border border-gray-200 mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Add New Question</h3>
+
+                  {/* Question Text */}
+                  <textarea
+                    className="w-full border border-gray-300 rounded-md p-2 text-sm mb-3"
+                    placeholder="Enter your question text..."
+                    value={newQuestionText}
+                    onChange={(e) => setNewQuestionText(e.target.value)}
+                  />
+
+                  {/* Question Type Selector */}
+                  <div className="flex items-center gap-4 mb-3">
+                    <label className="text-sm font-medium text-gray-700">Question Type:</label>
+                    <select
+                      className="border border-gray-300 rounded-md p-2 text-sm"
+                      value={newQuestionType}
+                      onChange={(e) => {
+                        const type = e.target.value as "multiple" | "long";
+                        setNewQuestionType(type);
+                        setChoices([]);
+                        setAnswers([]);
+                      }}
+                    >
+                      <option value="multiple">Multiple Choice</option>
+                      <option value="long">Long Form</option>
+                    </select>
+                  </div>
+
+                  {/* Multiple Choice Editor */}
+                  {newQuestionType === "multiple" && (
+                    <div className="space-y-2 mb-3">
+                      {choices.map((c, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={c.choice_text}
+                            onChange={(e) => {
+                              const updated = [...choices];
+                              updated[i].choice_text = e.target.value;
+                              setChoices(updated);
+                            }}
+                            placeholder={`Choice ${i + 1}`}
+                            className="flex-1 border border-gray-300 rounded-md p-2 text-sm"
+                          />
+                          <input
+                            type="checkbox"
+                            checked={c.is_correct}
+                            onChange={(e) => {
+                              const updated = [...choices];
+                              updated[i].is_correct = e.target.checked;
+                              setChoices(updated);
+                            }}
+                          />
+                          <button
+                            onClick={() => setChoices((prev) => prev.filter((_, j) => j !== i))}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setChoices([...choices, { choice_text: "", is_correct: false }])}
+                        className="text-sm text-green-600 hover:underline"
+                      >
+                        + Add Choice
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Long Form Editor */}
+                  {newQuestionType === "long" && (
+                    <div className="space-y-2 mb-3">
+                      {answers.map((a, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={a}
+                            onChange={(e) => {
+                              const updated = [...answers];
+                              updated[i] = e.target.value;
+                              setAnswers(updated);
+                            }}
+                            placeholder={`Accepted Answer ${i + 1}`}
+                            className="flex-1 border border-gray-300 rounded-md p-2 text-sm"
+                          />
+                          <button
+                            onClick={() => setAnswers((prev) => prev.filter((_, j) => j !== i))}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setAnswers([...answers, ""])}
+                        className="text-sm text-green-600 hover:underline"
+                      >
+                        + Add Accepted Answer
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={addQuestion}
+                    className="mt-2 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition"
+                  >
+                    ➕ Save Question
+                  </button>
+                </div>
+
+                {/* Existing Questions List */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Existing Questions</h3>
+                  {questions.length > 0 ? (
+                    <ul className="space-y-3">
+                      {questions.map((q, i) => (
+                        <li
+                          key={q.id}
+                          className="border border-gray-200 rounded-md p-3 bg-gray-50 shadow-sm"
+                        >
+                          <p className="font-medium text-gray-800">
+                            {i + 1}. {q.question_text}
+                          </p>
+                          <p className="text-sm text-gray-500 italic">
+                            Type: {q.question_type}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500 italic">No questions yet for this lesson.</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
