@@ -29,8 +29,7 @@ export async function GET(request: Request) {
 // === POST: add a new choice ===
 export async function POST(request: Request) {
   try {
-    const { question_id, choice_text, order_index, is_correct } =
-      await request.json();
+    const { question_id, choice_text, order_index, is_correct } = await request.json();
 
     if (!question_id)
       return NextResponse.json(
@@ -38,14 +37,32 @@ export async function POST(request: Request) {
         { status: 400 }
       );
 
+    // 🟢 1️⃣ Determine the next order_index dynamically
+    const { count } = await supabase
+      .from("question_choices")
+      .select("*", { count: "exact", head: true })
+      .eq("question_id", question_id);
+
+    const nextOrder = (count || 0) + 1;
+
+    // 🟢 2️⃣ Insert new choice with calculated order_index
     const { data, error } = await supabase
       .from("question_choices")
-      .insert([{ question_id, choice_text, order_index, is_correct }])
-      .select("*");
+      .insert([
+        {
+          question_id,
+          choice_text: choice_text || "",
+          order_index: nextOrder,
+          is_correct: !!is_correct,
+        },
+      ])
+      .select("*")
+      .single(); // ensures we return one object, not an array
 
     if (error) throw error;
 
-    return NextResponse.json(data[0], { status: 201 });
+    // 🟢 3️⃣ Return the inserted choice
+    return NextResponse.json(data, { status: 201 });
   } catch (err: any) {
     console.error("Error creating choice:", err.message);
     return NextResponse.json(

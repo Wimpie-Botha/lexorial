@@ -17,19 +17,26 @@ export async function POST(request: Request) {
     }
 
     //Create main question
-    const { data: questionData, error: questionError } = await supabase
-      .from("questions")
-      .insert([
-        {
-          lesson_id,
-          question_text,
-          question_type,
-          order_index: order_index || 1,
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select("*")
-      .single();
+    const { count } = await supabase
+  .from("questions")
+  .select("*", { count: "exact", head: true })
+  .eq("lesson_id", lesson_id);
+
+const nextOrder = (count || 0) + 1;
+
+const { data: questionData, error: questionError } = await supabase
+  .from("questions")
+  .insert([
+    {
+      lesson_id,
+      question_text,
+      question_type,
+      order_index: nextOrder,
+      created_at: new Date().toISOString(),
+    },
+  ])
+  .select("*")
+  .single();
 
     if (questionError) throw questionError;
 
@@ -151,5 +158,26 @@ export async function GET(request: Request) {
       { error: "Failed to fetch questions" },
       { status: 500 }
     );
+  }
+}
+
+// === DELETE /api/questions?id=uuid ===
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id)
+    return NextResponse.json({ error: "Missing question id" }, { status: 400 });
+
+  try {
+    // will cascade delete answers/choices if FK is set correctly
+    const { error } = await supabase.from("questions").delete().eq("id", id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ message: "Question deleted successfully" });
+  } catch (err: any) {
+    console.error("Error deleting question:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import React, { useEffect, useState } from "react";
-import { Pencil, Save, Trash2, Plus } from "lucide-react";
+import { Pencil, Save, Trash2, Plus, X} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Settings, LogOut, Home, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -58,6 +58,9 @@ interface Question {
   order_index?: number;
   choices?: QuestionChoice[];
   long_answers?: LongAnswer[];
+  isEditing?: boolean; 
+  highlight?: boolean; 
+
 }
 
 export default function CoursesPage() {
@@ -472,6 +475,35 @@ const addLesson = async () => {
   } else {
     console.error("Error adding lesson:", data.error);
     alert("❌ Failed to add lesson.");
+  }
+};
+
+// === Toggle inline edit mode for a question ===
+const toggleEditMode = (questionId: string, isEditing: boolean) => {
+  setQuestions((prev) =>
+    prev.map((q) =>
+      q.id === questionId ? { ...q, isEditing } : q
+    )
+  );
+};
+
+// === Delete a question ===
+const handleDeleteQuestion = async (questionId: string) => {
+  if (!confirm("Are you sure you want to delete this question?")) return;
+
+  try {
+    const res = await fetch(`/api/questions?id=${questionId}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) throw new Error("Failed to delete question.");
+
+    // Remove from local state
+    setQuestions((prev) => prev.filter((q) => q.id !== questionId));
+    alert("✅ Question deleted successfully!");
+  } catch (err) {
+    console.error("Error deleting question:", err);
+    alert("❌ Failed to delete question.");
   }
 };
 
@@ -1309,132 +1341,271 @@ if (selectedLesson && lessonContent) {
                 </div>
 
 
-                {/* === EXISTING QUESTIONS === */}
+                  {/* === EXISTING QUESTIONS === */}
                 <h2 className="text-lg font-semibold text-gray-800 mt-8 mb-3">
                   Existing Questions
                 </h2>
 
-                {questions.map((q, i) => (
-                  <div
-                    key={q.id}
-                    className={`border rounded-lg mb-3 transition-all ${
-                      editingQuestionId === q.id
-                        ? "bg-green-50 border-green-300"
-                        : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    {/* === Header / Inline editable question === */}
-                    <div
-                      className="flex justify-between items-center px-3 py-2 cursor-pointer"
-                      onClick={() => handleExpandQuestion(q.id, q.question_type)}
+                <ul className="border-t border-gray-200 pt-2">
+                  {questions.map((q) => (
+                    <li
+                      key={q.id}
+                      className={`flex flex-col border-b border-gray-100 rounded-md transition-all ${
+                        editingQuestionId === q.id
+                          ? "bg-green-50 border-green-400"
+                          : "hover:bg-gray-50"
+                      }`}
                     >
-                      <input
-                        type="text"
-                        className="font-medium text-gray-800 border border-transparent rounded-md hover:border-gray-300 focus:border-green-400 focus:ring-0 bg-transparent w-full mr-2"
-                        value={q.question_text}
-                        onChange={(e) => handleQuestionTextChange(q.id, e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <span className="text-xs text-gray-500 italic">
-                        Type: {q.question_type}
-                      </span>
-                    </div>
+                        {/* === Header Row === */}
+                        <div
+                          className="flex justify-between items-center px-3 py-2 cursor-pointer"
+                          onClick={() => handleExpandQuestion(q.id, q.question_type)}
+                        >
+                          <span className="text-gray-800 text-sm flex-1">
+                            {q.question_text}
+                          </span>
 
-                    {/* === Expanded Section (Choices / Answers) === */}
-                    {editingQuestionId === q.id && (
-                      <div className="p-4 border-t border-gray-200">
-                        {/* === Multiple Choice Answers === */}
-                        {q.question_type === "multiple" && (
-                          <div className="space-y-2">
-                            {q.choices?.map((choice) => (
-                              <div
-                                key={choice.id}
-                                className="flex justify-between items-center border-b border-gray-100 pb-1"
-                              >
-                                <input
-                                  type="text"
-                                  value={choice.choice_text}
-                                  onChange={(e) =>
-                                    handleChoiceEdit(q.id, choice.id, e.target.value)
-                                  }
-                                  className="flex-1 bg-transparent p-1 text-sm border-none focus:ring-0 focus:outline-none"
-                                />
-                                <div className="flex items-center gap-3">
-                                  <label className="flex items-center text-xs text-gray-700">
-                                    <input
-                                      type="checkbox"
-                                      checked={choice.is_correct}
-                                      onChange={(e) =>
-                                        handleChoiceToggle(q.id, choice.id, e.target.checked)
-                                      }
-                                      className="mr-1"
-                                    />
-                                    Correct
-                                  </label>
-                                  <button
-                                    onClick={() => handleDeleteChoice(choice.id)}
-                                    className="text-red-500 hover:text-red-700"
-                                  >
-                                    🗑
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs italic text-gray-500">
+                              Type: {q.question_type}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleEditMode(q.id, true);
+                              }}
+                              className="text-blue-500 hover:text-blue-700"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteQuestion(q.id);
+                              }}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* === Inline Edit Mode === */}
+                       {q.isEditing && (
+                          <div className="flex items-center gap-2 px-3 pb-2">
+                            <input
+                              type="text"
+                              value={q.question_text}
+                              onChange={(e) => handleQuestionTextChange(q.id, e.target.value)}
+                              onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveQuestion(q);
+                                toggleEditMode(q.id, false);
+                                e.currentTarget.blur(); // ✅ exit typing mode
+
+                                // ✅ trigger the green flash
+                                setQuestions((prev) =>
+                                  prev.map((qq) =>
+                                    qq.id === q.id ? { ...qq, highlight: true } : qq
+                                  )
+                                );
+                                setTimeout(() => {
+                                  setQuestions((prev) =>
+                                    prev.map((qq) =>
+                                      qq.id === q.id ? { ...qq, highlight: false } : qq
+                                    )
+                                  );
+                                }, 800);
+                              } else if (e.key === "Escape") {
+                                toggleEditMode(q.id, false);
+                              }
+                            }}
+                              className="flex-1 border border-gray-300 rounded-md p-1 text-sm"
+                              autoFocus
+                            />
 
                             <button
-                              onClick={() => handleAddChoice(q.id)}
-                              className="text-green-600 text-sm hover:text-green-700 mt-2"
+                              onClick={() => toggleEditMode(q.id, false)}
+                              className="text-gray-500 hover:text-gray-700"
+                              title="Cancel"
                             >
-                              + Add Choice
+                              <X size={16} />
                             </button>
                           </div>
                         )}
 
-                       {/* === Long Answers === */}
-                        {q.question_type === "long" && (
-                          <div className="space-y-2">
-                            {q.long_answers?.map((ans) => (
-                              <div
-                                key={ans.id} // ✅ key must be inside opening tag
-                                className="flex justify-between items-center border-b border-gray-100 pb-1"
-                              >
-                                <input
-                                  type="text"
-                                  value={ans.accepted_answer}
-                                  onChange={(e) =>
-                                    handleAnswerEdit(q.id, ans.id, e.target.value)
-                                  }
-                                  className="flex-1 bg-transparent p-1 text-sm border-none focus:ring-0 focus:outline-none"
-                                />
-                                <button
-                                  onClick={() => handleDeleteAnswer(ans.id)}
-                                  className="text-red-500 hover:text-red-700"
+                        {/* === Expanded Content (Choices / Answers) === */}
+                        {editingQuestionId === q.id && (
+                            <div
+                            className={`p-4 border-t border-gray-200 transition-all duration-500 ${
+                              q.highlight ? "bg-green-100" : "bg-gray-50"
+                            }`}
+                            >
+                            {/* === Multiple Choice Answers === */}
+                            {q.question_type === "multiple" && (
+                            <div className="space-y-2">
+                              {q.choices?.map((choice) => (
+                                <div
+                                  key={choice.id}
+                                  className="flex justify-between items-center border-b border-gray-100 pb-1"
                                 >
-                                  🗑
+                                  <input
+                                    type="text"
+                                    value={choice.choice_text ?? ""}
+                                    onChange={(e) => {
+                                      // update local state immediately
+                                      setQuestions((prev) =>
+                                        prev.map((qq) =>
+                                          qq.id === q.id
+                                            ? {
+                                                ...qq,
+                                                choices: qq.choices?.map((c) =>
+                                                  c.id === choice.id
+                                                    ? { ...c, choice_text: e.target.value }
+                                                    : c
+                                                ),
+                                              }
+                                            : qq
+                                        )
+                                      );
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        handleChoiceEdit(q.id, choice.id, choice.choice_text);
+                                        e.currentTarget.blur(); // ✅ exit typing
+
+                                        // ✅ flash the parent question card
+                                        setQuestions((prev) =>
+                                          prev.map((qq) =>
+                                            qq.id === q.id ? { ...qq, highlight: true } : qq
+                                          )
+                                        );
+                                        setTimeout(() => {
+                                          setQuestions((prev) =>
+                                            prev.map((qq) =>
+                                              qq.id === q.id ? { ...qq, highlight: false } : qq
+                                            )
+                                          );
+                                        }, 800);
+                                      } else if (e.key === "Escape") {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
+                                    className="flex-1 bg-transparent p-1 text-sm border-none focus:ring-0 focus:outline-none"
+                                    placeholder="Enter choice text..."
+                                  />
+
+                                  <div className="flex items-center gap-3">
+                                    <label className="flex items-center text-xs text-gray-700">
+                                      <input
+                                        type="checkbox"
+                                        checked={choice.is_correct}
+                                        onChange={(e) =>
+                                          handleChoiceToggle(q.id, choice.id, e.target.checked)
+                                        }
+                                        className="mr-1"
+                                      />
+                                      Correct
+                                    </label>
+                                    <button
+                                      onClick={() => handleDeleteChoice(choice.id)}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                              <button
+                                onClick={() => handleAddChoice(q.id)}
+                                className="text-green-600 text-sm hover:text-green-700 mt-2"
+                              >
+                                <Plus size={14} className="inline mr-1" /> Add Choice
+                              </button>
+                            </div>
+                          )}
+
+                            {/* === Long Answers === */}
+                            {q.question_type === "long" && (
+                              <div className="space-y-2">
+                                {q.long_answers?.map((ans) => (
+                                  <div
+                                    key={ans.id}
+                                    className="flex justify-between items-center border-b border-gray-100 pb-1"
+                                  >
+                                    <input
+                                      type="text"
+                                      value={ans.accepted_answer ?? ""}
+                                      onChange={(e) => {
+                                        // local update only
+                                        setQuestions((prev) =>
+                                          prev.map((qq) =>
+                                            qq.id === q.id
+                                              ? {
+                                                  ...qq,
+                                                  long_answers: qq.long_answers?.map((a) =>
+                                                    a.id === ans.id
+                                                      ? { ...a, accepted_answer: e.target.value }
+                                                      : a
+                                                  ),
+                                                }
+                                              : qq
+                                          )
+                                        );
+                                      }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        handleAnswerEdit(q.id, ans.id, ans.accepted_answer);
+                                        e.currentTarget.blur(); // ✅ exit typing
+
+                                        // ✅ flash the question area
+                                        setQuestions((prev) =>
+                                          prev.map((qq) =>
+                                            qq.id === q.id ? { ...qq, highlight: true } : qq
+                                          )
+                                        );
+                                        setTimeout(() => {
+                                          setQuestions((prev) =>
+                                            prev.map((qq) =>
+                                              qq.id === q.id ? { ...qq, highlight: false } : qq
+                                            )
+                                          );
+                                        }, 800);
+                                      } else if (e.key === "Escape") {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
+
+                                      className="flex-1 bg-transparent p-1 text-sm border-none focus:ring-0 focus:outline-none"
+                                      placeholder="Enter accepted answer..."
+                                    />
+                                    <button
+                                      onClick={() => handleDeleteAnswer(ans.id)}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  onClick={() => handleAddAnswer(q.id)}
+                                  className="text-green-600 text-sm hover:text-green-700 mt-2"
+                                >
+                                  <Plus size={14} className="inline mr-1" /> Add Answer
                                 </button>
                               </div>
-                            ))}
+                            )}
 
-                            <button
-                              onClick={() => handleAddAnswer(q.id)}
-                              className="text-green-600 text-sm hover:text-green-700 mt-2"
-                            >
-                              ➕ Add Answer
-                            </button>
+
                           </div>
                         )}
-
-                        {/* === Save Changes Button === */}
-                        <button
-                          onClick={() => handleSaveQuestion(q)}
-                          className="mt-4 bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-all"
-                        >
-                          💾 Save Changes
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}               
+                      </li>
+                    ))}
+                  </ul>              
               </div>
             )}
           </div>
